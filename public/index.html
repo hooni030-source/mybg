@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>👑 ULTIMATE CODENAMES</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&display=swap" rel="stylesheet">
+  <style>
+    .font-title { font-family: 'Black Han Sans', sans-serif; }
+    .font-game { font-family: 'Do Hyeon', sans-serif; }
+    .word-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.75rem; }
+    @media (max-width: 640px) { .word-grid { gap: 0.35rem; } }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-game tracking-wide">
+
+  <div id="app" class="container mx-auto p-4 max-w-5xl">
+    <div id="view-login" class="max-w-md mx-auto my-24 bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl">
+      <h1 class="text-4xl font-title text-center mb-8 bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">🕵️‍♂️ CODENAMES</h1>
+      <div class="space-y-5">
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-2">요원 닉네임</label>
+          <input type="text" id="input-nickname" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white outline-none" placeholder="이름을 입력하세요">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-2">작전 룸 코드 (선택)</label>
+          <input type="text" id="input-roomid" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white uppercase outline-none" placeholder="예: FW12">
+        </div>
+        <button onclick="joinRoom()" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-3 rounded-xl transition transform active:scale-95 shadow-lg">작전지 진입</button>
+      </div>
+    </div>
+
+    <div id="view-game" class="hidden space-y-6">
+      <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-wrap justify-between items-center shadow-xl gap-4">
+        <div class="flex items-center space-x-4">
+          <div class="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800">
+            <span class="block text-[10px] text-slate-500 font-bold">ROOM CODE</span>
+            <span id="display-room-id" class="text-xl font-mono font-bold text-indigo-400 select-all">----</span>
+          </div>
+          <div>
+            <div id="role-badge" class="inline-block text-[11px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400 mb-1">관전자</div>
+            <p id="display-status" class="text-xs text-slate-400 font-sans">연결 동기화 대기 중...</p>
+          </div>
+        </div>
+        
+        <div class="flex items-center space-x-4 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800">
+          <div class="text-center px-2">
+            <span class="block text-[10px] text-red-500 font-bold">RED</span>
+            <span id="score-red" class="text-xl font-bold text-red-400">0</span>
+          </div>
+          <div id="turn-indicator" class="px-4 py-1 rounded-lg text-center">
+            <span class="block text-[10px] text-slate-400 font-bold">CURRENT TURN</span>
+            <span id="display-turn" class="text-base font-title">READY</span>
+          </div>
+          <div class="text-center px-2">
+            <span class="block text-[10px] text-blue-500 font-bold">BLUE</span>
+            <span id="score-blue" class="text-xl font-bold text-blue-400">0</span>
+          </div>
+          <div class="w-[1px] h-8 bg-slate-800 mx-2"></div>
+          <div class="text-center min-w-[45px]">
+            <span class="block text-[10px] text-amber-400 font-bold">TIMER</span>
+            <span id="display-timer" class="text-xl font-mono font-bold text-yellow-400">00</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="host-panel" class="hidden bg-slate-900 border border-indigo-500/20 p-5 rounded-2xl space-y-4">
+        <h3 class="text-sm font-bold text-indigo-400 uppercase">⚙️ 호스트 작전 제어판</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1.5">인원 정원 세팅</label>
+            <select id="select-max-players" onchange="updateSettings()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-white">
+              <option value="6">6인 (팀장1, 선택자1, 요원1)</option>
+              <option value="8" selected>8인 (팀장1, 선택자1, 요원2)</option>
+              <option value="10">10인 (팀장1, 선택자1, 요원3)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1.5">출제 타임(초)</label>
+            <input type="number" id="input-clue-time" onchange="updateSettings()" value="60" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-sm text-white">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1.5">추리 타임(초)</label>
+            <input type="number" id="input-guess-time" onchange="updateSettings()" value="90" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-sm text-white">
+          </div>
+        </div>
+        <button onclick="startGame()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-title py-3 rounded-xl shadow-lg">⚔️ 작전 개시 (START GAME)</button>
+      </div>
+
+      <div id="lobby-slots" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-red-950/10 border border-red-900/20 p-5 rounded-2xl space-y-3">
+          <h3 class="text-center font-bold text-red-400">🔴 RED FACTION</h3>
+          <div onclick="selectSlot('RED_SPYMASTER')" id="slot-RED_SPYMASTER" class="bg-slate-900 p-3 rounded-xl border border-dashed border-red-500/20 cursor-pointer text-center text-sm hover:bg-slate-800">암호 출제 팀장</div>
+          <div onclick="selectSlot('RED_LEADER')" id="slot-RED_LEADER" class="bg-slate-900 p-3 rounded-xl border border-red-500/40 text-yellow-400 font-bold cursor-pointer text-center text-sm hover:bg-slate-800">🎯 최종 선택자 (클릭 권한자)</div>
+          <div id="slots-red-operatives" class="space-y-2"></div>
+        </div>
+        <div class="bg-blue-950/10 border border-blue-900/20 p-5 rounded-2xl space-y-3">
+          <h3 class="text-center font-bold text-blue-400">🔵 BLUE FACTION</h3>
+          <div onclick="selectSlot('BLUE_SPYMASTER')" id="slot-BLUE_SPYMASTER" class="bg-slate-900 p-3 rounded-xl border border-dashed border-blue-500/20 cursor-pointer text-center text-sm hover:bg-slate-800">암호 출제 팀장</div>
+          <div onclick="selectSlot('BLUE_LEADER')" id="slot-BLUE_LEADER" class="bg-slate-900 p-3 rounded-xl border border-blue-500/40 text-yellow-400 font-bold cursor-pointer text-center text-sm hover:bg-slate-800">🎯 최종 선택자 (클릭 권한자)</div>
+          <div id="slots-blue-operatives" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <div id="ingame-board" class="hidden space-y-5">
+        <div id="clue-briefing-bar" class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div class="flex items-center space-x-3 w-full sm:w-auto">
+            <div class="w-2 h-8 bg-amber-500 rounded-full"></div>
+            <div>
+              <span class="block text-[10px] text-slate-500 font-bold">MISSION BRIEFING</span>
+              <p id="text-current-clue-premium" class="text-xl font-title text-slate-200">신호 조율 중...</p>
+            </div>
+          </div>
+          <button id="btn-skip-guess" onclick="skipGuess()" class="hidden w-full sm:w-auto bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold px-5 py-2 rounded-xl text-sm transition">추리 종료 (Pass)</button>
+        </div>
+
+        <div id="spymaster-action-bar" class="hidden bg-slate-900 border border-yellow-500/30 p-4 rounded-2xl flex flex-wrap gap-4 items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <span class="text-yellow-400 text-sm font-bold">🎙️ 암호 전송기:</span>
+            <input type="text" id="clue-word" class="bg-slate-950 border border-slate-700 rounded-xl p-2 text-sm text-white outline-none w-44" placeholder="힌트 단어">
+            <input type="number" id="clue-count" class="bg-slate-950 border border-slate-700 rounded-xl p-2 text-sm text-white w-16 text-center outline-none" value="1" min="1" max="9">
+          </div>
+          <button onclick="submitClue()" class="bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950 font-title px-6 py-2 rounded-xl text-sm shadow-md">암호 전송</button>
+        </div>
+
+        <div id="grid-container" class="word-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io('http://127.0.0.1:4000');
+    let myId = null; let roomState = null;
+
+    function joinRoom() {
+      const nickname = document.getElementById('input-nickname').value.trim();
+      const roomId = document.getElementById('input-roomid').value.trim();
+      if(!nickname) return alert("요원명을 채워주세요.");
+      socket.emit('join_room', { roomId, nickname });
+      document.getElementById('view-login').classList.add('hidden');
+      document.getElementById('view-game').classList.remove('hidden');
+    }
+
+    socket.on('room_joined', (data) => { myId = data.myId; document.getElementById('display-room-id').innerText = data.roomId; });
+
+    socket.on('update_room', (room) => {
+      roomState = room; const me = room.players[myId];
+      
+      const redLeft = room.words.filter(w => w.type === 'RED' && !w.isRevealed).length;
+      const blueLeft = room.words.filter(w => w.type === 'BLUE' && !w.isRevealed).length;
+      document.getElementById('score-red').innerText = room.words.length ? redLeft : 9;
+      document.getElementById('score-blue').innerText = room.words.length ? blueLeft : 8;
+
+      // 역할 배지 세분화 노출
+      const badge = document.getElementById('role-badge');
+      if(room.slots.RED_SPYMASTER === myId) badge.innerText = "🔴 RED 팀장";
+      else if(room.slots.RED_LEADER === myId) badge.innerText = "🎯 RED 선택자";
+      else if(room.slots.BLUE_SPYMASTER === myId) badge.innerText = "🔵 BLUE 팀장";
+      else if(room.slots.BLUE_LEADER === myId) badge.innerText = "🎯 BLUE 선택자";
+      else if(room.slots.RED_OPERATIVES.includes(myId)) badge.innerText = "RED 일반 요원";
+      else if(room.slots.BLUE_OPERATIVES.includes(myId)) badge.innerText = "BLUE 일반 요원";
+      else badge.innerText = "관전자";
+
+      const turnIndicator = document.getElementById('turn-indicator');
+      const turnText = document.getElementById('display-turn');
+      turnText.innerText = room.gameState.turn + " TURN";
+      if(room.gameState.turn === 'RED') {
+        turnIndicator.className = "px-4 py-1 rounded-lg text-center bg-red-950/40 border border-red-500/20";
+        turnText.className = "text-base font-title text-red-400";
+      } else {
+        turnIndicator.className = "px-4 py-1 rounded-lg text-center bg-blue-950/40 border border-blue-500/20";
+        turnText.className = "text-base font-title text-blue-400";
+      }
+
+      document.getElementById('display-status').innerText = `상태: ${room.gameState.phase}`;
+      if (me.isHost && room.gameState.phase === 'LOBBY') document.getElementById('host-panel').classList.remove('hidden');
+      else document.getElementById('host-panel').classList.add('hidden');
+
+      if (room.gameState.phase === 'LOBBY') {
+        document.getElementById('lobby-slots').classList.remove('hidden');
+        document.getElementById('ingame-board').classList.add('hidden');
+        renderLobbySlots(room);
+      } else {
+        document.getElementById('lobby-slots').classList.add('hidden');
+        document.getElementById('ingame-board').classList.remove('hidden');
+        renderInGameBoard(room);
+      }
+    });
+
+    socket.on('timer_update', (data) => { document.getElementById('display-timer').innerText = String(data.timer).padStart(2, '0'); });
+
+    function renderLobbySlots(room) {
+      document.getElementById('slot-RED_SPYMASTER').innerText = room.slots.RED_SPYMASTER ? `🕵️‍♂️ 팀장: ${room.players[room.slots.RED_SPYMASTER]?.nickname}` : "[ 레드 팀장 등록 ]";
+      document.getElementById('slot-BLUE_SPYMASTER').innerText = room.slots.BLUE_SPYMASTER ? `🕵️‍♂️ 팀장: ${room.players[room.slots.BLUE_SPYMASTER]?.nickname}` : "[ 블루 팀장 등록 ]";
+      document.getElementById('slot-RED_LEADER').innerText = room.slots.RED_LEADER ? `🎯 선택자: ${room.players[room.slots.RED_LEADER]?.nickname}` : "🎯 [ RED 선택자 등록 ]";
+      document.getElementById('slot-BLUE_LEADER').innerText = room.slots.BLUE_LEADER ? `🎯 선택자: ${room.players[room.slots.BLUE_LEADER]?.nickname}` : "🎯 [ BLUE 선택자 등록 ]";
+
+      const redOp = document.getElementById('slots-red-operatives'); redOp.innerHTML = '';
+      room.slots.RED_OPERATIVES.forEach((slot, idx) => redOp.appendChild(createSlotElement('RED_OPERATIVES', slot, idx, room.players[myId].isHost)));
+
+      const blueOp = document.getElementById('slots-blue-operatives'); blueOp.innerHTML = '';
+      room.slots.BLUE_OPERATIVES.forEach((slot, idx) => blueOp.appendChild(createSlotElement('BLUE_OPERATIVES', slot, idx, room.players[myId].isHost)));
+    }
+
+    function createSlotElement(slotType, slotValue, index, isHost) {
+      const div = document.createElement('div'); div.className = "flex items-center space-x-2";
+      const slotBtn = document.createElement('button');
+      slotBtn.className = `flex-1 p-2 text-xs rounded-xl font-bold border ${slotValue === 'LOCKED' ? 'bg-slate-950 border-slate-800 text-slate-700' : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'}`;
+      if (slotValue === 'LOCKED') slotBtn.innerText = `🔒 잠긴 슬롯`;
+      else if (slotValue) slotBtn.innerText = `👤 일반요원: ${roomState.players[slotValue]?.nickname}`;
+      else { slotBtn.innerText = `+ 빈 슬롯 참여`; slotBtn.onclick = () => selectSlot(slotType, index); }
+      div.appendChild(slotBtn);
+
+      if (isHost) {
+        const lockBtn = document.createElement('button');
+        lockBtn.className = "text-xs px-2 py-1 bg-slate-800 rounded-lg text-slate-400";
+        lockBtn.innerText = slotValue === 'LOCKED' ? "해제" : "잠금";
+        lockBtn.onclick = () => socket.emit('toggle_lock_slot', { roomId: roomState.roomId, slotType, index });
+        div.appendChild(lockBtn);
+      }
+      return div;
+    }
+
+    function selectSlot(slotType, index = null) { socket.emit('select_slot', { roomId: roomState.roomId, slotType, index }); }
+    function updateSettings() {
+      const maxPlayers = parseInt(document.getElementById('select-max-players').value, 10);
+      const clueTimeLimit = parseInt(document.getElementById('input-clue-time').value, 10);
+      const guessTimeLimit = parseInt(document.getElementById('input-guess-time').value, 10);
+      socket.emit('change_max_players', { roomId: roomState.roomId, maxPlayers });
+      socket.emit('change_timer_settings', { roomId: roomState.roomId, clueTimeLimit, guessTimeLimit });
+    }
+    function startGame() { socket.emit('game_start', { roomId: roomState.roomId }); }
+
+    function renderInGameBoard(room) {
+      const isRedSpy = room.slots.RED_SPYMASTER === myId;
+      const isBlueSpy = room.slots.BLUE_SPYMASTER === myId;
+      const amISpymaster = isRedSpy || isBlueSpy;
+      
+      // [동적 판단 권한 체크] 내가 현재 턴의 '선택자'인가?
+      const currentLeader = room.gameState.turn === 'RED' ? room.slots.RED_LEADER : room.slots.BLUE_LEADER;
+      const amILeaderOfCurrentTurn = (currentLeader === myId);
+
+      const isMyTeamTurn = room.gameState.turn === (isRedSpy || room.slots.RED_LEADER === myId || room.slots.RED_OPERATIVES.includes(myId) ? 'RED' : 'BLUE');
+
+      if (room.gameState.phase === 'CLUE_WAITING' && amISpymaster && isMyTeamTurn) {
+        document.getElementById('spymaster-action-bar').classList.remove('hidden');
+      } else {
+        document.getElementById('spymaster-action-bar').classList.add('hidden');
+      }
+
+      const briefingText = document.getElementById('text-current-clue-premium');
+      const passBtn = document.getElementById('btn-skip-guess');
+      
+      if (room.gameState.phase === 'GUESSING') {
+        briefingText.innerHTML = `📢 암호: <span class="text-yellow-400 font-black px-2 py-0.5 bg-yellow-400/10 rounded">${room.gameState.currentClue.word}</span> ➡️ <span class="text-amber-400">${room.gameState.currentClue.count}개</span> <span class="text-xs text-slate-400"> (매칭: ${room.gameState.currentClue.guessedCount}개)</span>`;
+        // 패스 버튼도 오직 현재 턴의 선택자에게만 노출
+        if(amILeaderOfCurrentTurn) passBtn.classList.remove('hidden');
+        else passBtn.classList.add('hidden');
+      } else {
+        briefingText.innerText = `⏳ ${room.gameState.turn} 팀장이 암호 신호 조율 중...`;
+        passBtn.classList.add('hidden');
+      }
+
+      const gridContainer = document.getElementById('grid-container');
+      gridContainer.innerHTML = '';
+
+      room.words.forEach(card => {
+        const cardBtn = document.createElement('button');
+        cardBtn.className = `aspect-[4/3] p-3 rounded-2xl font-title text-center flex flex-col justify-center items-center text-sm md:text-lg border transition-all shadow-md`;
+        cardBtn.innerText = card.text;
+
+        const activeType = (card.isRevealed || amISpymaster) ? card.type : 'UNKNOWN';
+
+        if (activeType === 'RED') cardBtn.className += card.isRevealed ? ' bg-red-600 text-white border-red-500' : ' bg-red-950/70 text-red-300 border-red-900/60';
+        else if (activeType === 'BLUE') cardBtn.className += card.isRevealed ? ' bg-blue-600 text-white border-blue-500' : ' bg-blue-950/70 text-blue-300 border-blue-900/60';
+        else if (activeType === 'NEUTRAL') cardBtn.className += card.isRevealed ? ' bg-orange-100 text-slate-900' : ' bg-slate-800 text-slate-400 border-slate-700';
+        else if (activeType === 'ASSASSIN') cardBtn.className += card.isRevealed ? ' bg-black text-red-600 border-red-600 font-black' : ' bg-slate-900 text-slate-600 border-red-950';
+        else cardBtn.className += ' bg-slate-900 text-slate-100 border-slate-800 hover:border-indigo-500/40 hover:-translate-y-0.5';
+
+        // [클릭 권한 변경] 추리 페이즈 + 오직 현재 턴의 '선택자(Leader)'만 카드 클릭 활성화
+        if (room.gameState.phase === 'GUESSING' && amILeaderOfCurrentTurn && !card.isRevealed) {
+          cardBtn.onclick = () => socket.emit('click_card', { roomId: room.roomId, cardId: card.id });
+          cardBtn.className += ' cursor-pointer';
+        } else {
+          cardBtn.className += ' cursor-not-allowed';
+          if(!card.isRevealed) cardBtn.className += ' opacity-60';
+        }
+
+        if (card.isRevealed) cardBtn.className += ' brightness-[0.35] scale-95 line-through';
+        gridContainer.appendChild(cardBtn);
+      });
+
+      if (room.gameState.phase === 'ENDED') alert(`🚨 미션 종료 🚨\n승리: [ ${room.gameState.winner} FACTION ]`);
+    }
+
+    function submitClue() {
+      const word = document.getElementById('clue-word').value.trim();
+      const count = document.getElementById('clue-count').value;
+      if(!word) return alert("힌트를 입력하세요.");
+      socket.emit('submit_clue', { roomId: roomState.roomId, word, count });
+      document.getElementById('clue-word').value = '';
+    }
+    function skipGuess() { socket.emit('skip_guess', { roomId: roomState.roomId }); }
+    socket.on('game_error', (data) => alert(data.message));
+  </script>
+</body>
+</html>
