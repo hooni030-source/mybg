@@ -3,40 +3,50 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>👑 ULTIMATE CODENAMES</title>
+  <title>👑 PREMIUM CODENAMES</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@700;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
   <style>
-    .font-title { font-family: 'Black Han Sans', sans-serif; }
-    .font-game { font-family: 'Do Hyeon', sans-serif; }
-    .word-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.75rem; }
-    @media (max-width: 640px) { .word-grid { gap: 0.35rem; } }
+    /* 폰트 세팅 분리 및 가독성 최적화 */
+    .font-hud { font-family: 'Orbitron', sans-serif; }
+    .font-card { font-family: 'Gothic A1', sans-serif; font-weight: 900; }
+    .word-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.85rem; }
+    @media (max-width: 640px) { .word-grid { gap: 0.4rem; } }
+    
+    /* 글자 겹침 방지 및 짤 위에서 텍스트 시인성 확보를 위한 텍스트 외곽선 셰이더 */
+    .text-stroke {
+      text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000,
+                   -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+                   0px 4px 8px rgba(0,0,0,0.9);
+    }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-game tracking-wide relative">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-card tracking-wide relative">
 
-  <div id="game-over-overlay" class="hidden fixed inset-0 z-50 bg-black/90 flex flex-col justify-center items-center p-4 backdrop-blur-md">
-    <div class="max-w-xl w-full text-center space-y-6">
-      <h1 id="overlay-title" class="text-5xl font-title tracking-wider animate-bounce">RED FACTION WIN</h1>
-      <div class="border-4 border-slate-700 rounded-2xl overflow-hidden shadow-2xl aspect-[4/3] bg-slate-950">
+  <div id="game-over-overlay" class="hidden fixed inset-0 z-50 bg-black/95 flex flex-col justify-center items-center p-4 backdrop-blur-md">
+    <div class="max-w-3xl w-full text-center space-y-8 px-4">
+      <h1 id="overlay-title" class="text-3xl sm:text-5xl font-hud tracking-widest text-emerald-400 animate-pulse uppercase block w-full leading-tight drop-shadow-[0_4px_12px_rgba(16,185,129,0.3)]">
+        RED FACTION WIN
+      </h1>
+      <div class="border-4 border-slate-700 rounded-2xl overflow-hidden shadow-2xl shadow-black/80 aspect-[4/3] bg-slate-950 max-w-xl mx-auto">
         <img id="overlay-img" src="" class="w-full h-full object-cover">
       </div>
-      <p id="overlay-desc" class="text-slate-400 text-lg font-sans">작전이 종료되었습니다. 새로운 게임을 하려면 방장이 새로고침 후 다시 시작하세요.</p>
+      <p id="overlay-desc" class="text-slate-400 text-sm sm:text-base font-sans tracking-wide">작전이 전역 종료되었습니다. 방장이 새로고침 후 다시 진입하세요.</p>
     </div>
   </div>
 
   <div id="app" class="container mx-auto p-4 max-w-5xl">
     
     <div id="view-login" class="max-w-md mx-auto my-24 bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl">
-      <h1 class="text-4xl font-title text-center mb-8 bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">🕵️‍♂️ CODENAMES</h1>
+      <h1 class="text-4xl font-hud text-center mb-8 bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent tracking-widest">CODENAMES</h1>
       <div class="space-y-5">
         <div>
-          <label class="block text-xs font-bold text-slate-400 mb-2">요원 닉네임</label>
+          <label class="block text-xs font-bold text-slate-400 mb-2 tracking-wider">요원 닉네임</label>
           <input type="text" id="input-nickname" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white outline-none" placeholder="이름이나 별명을 입력하세요">
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-400 mb-2">작전 룸 코드 (비워두면 새로 개설)</label>
+          <label class="block text-xs font-bold text-slate-400 mb-2 tracking-wider">작전 룸 코드 (비워두면 새로 개설)</label>
           <input type="text" id="input-roomid" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white uppercase outline-none" placeholder="예: FW12">
         </div>
         <button onclick="joinRoom()" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-3 rounded-xl transition transform active:scale-95 shadow-lg">작전지 진입</button>
@@ -46,12 +56,12 @@
     <div id="view-game" class="hidden space-y-6">
       <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-wrap justify-between items-center shadow-xl gap-4">
         <div class="flex items-center space-x-4">
-          <div class="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800">
+          <div class="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800 font-hud">
             <span class="block text-[10px] text-slate-500 font-bold">ROOM CODE</span>
-            <span id="display-room-id" class="text-xl font-mono font-bold text-indigo-400 select-all">----</span>
+            <span id="display-room-id" class="text-xl font-bold text-indigo-400 select-all">----</span>
           </div>
           <div class="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800">
-            <span class="block text-[10px] text-amber-400 font-bold">MY CODE NAME</span>
+            <span class="block text-[10px] text-amber-400 font-bold tracking-wider">MY CODE NAME</span>
             <span id="display-my-nickname" class="text-base font-bold text-slate-200">불러오는 중...</span>
           </div>
           <div>
@@ -60,14 +70,14 @@
           </div>
         </div>
         
-        <div class="flex items-center space-x-4 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800">
+        <div class="flex items-center space-x-4 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800 font-hud">
           <div class="text-center px-2">
             <span class="block text-[10px] text-red-500 font-bold">RED</span>
             <span id="score-red" class="text-xl font-bold text-red-400">0</span>
           </div>
           <div id="turn-indicator" class="px-4 py-1 rounded-lg text-center">
             <span class="block text-[10px] text-slate-400 font-bold">CURRENT TURN</span>
-            <span id="display-turn" class="text-base font-title">READY</span>
+            <span id="display-turn" class="text-base font-bold">READY</span>
           </div>
           <div class="text-center px-2">
             <span class="block text-[10px] text-blue-500 font-bold">BLUE</span>
@@ -76,13 +86,13 @@
           <div class="w-[1px] h-8 bg-slate-800 mx-2"></div>
           <div class="text-center min-w-[45px]">
             <span class="block text-[10px] text-amber-400 font-bold">TIMER</span>
-            <span id="display-timer" class="text-xl font-mono font-bold text-yellow-400">00</span>
+            <span id="display-timer" class="text-xl font-bold text-yellow-400">00</span>
           </div>
         </div>
       </div>
 
       <div id="host-panel" class="hidden bg-slate-900 border border-indigo-500/20 p-5 rounded-2xl space-y-4">
-        <h3 class="text-sm font-bold text-indigo-400 uppercase">⚙️ 호스트 작전 제어판</h3>
+        <h3 class="text-sm font-bold text-indigo-400 uppercase font-hud tracking-wider">⚙️ 호스트 작전 제어판</h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label class="block text-xs text-slate-400 mb-1.5">인원 정원 세팅</label>
@@ -93,26 +103,26 @@
             </select>
           </div>
           <div>
-            <label class="block text-xs text-slate-400 mb-1.5">출제 타임(초)</label>
+            <label class="block text-xs text-slate-400 mb-1.5 font-hud">출제 타임(초)</label>
             <input type="number" id="input-clue-time" onchange="updateSettings()" value="60" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-sm text-white">
           </div>
           <div>
-            <label class="block text-xs text-slate-400 mb-1.5">추리 타임(초)</label>
+            <label class="block text-xs text-slate-400 mb-1.5 font-hud">추리 타임(초)</label>
             <input type="number" id="input-guess-time" onchange="updateSettings()" value="90" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-sm text-white">
           </div>
         </div>
-        <button onclick="startGame()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-title py-3 rounded-xl shadow-lg">⚔️ 작전 개시 (START GAME)</button>
+        <button onclick="startGame()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold py-3 rounded-xl shadow-lg font-hud tracking-wider">⚔️ 작전 개시 (START GAME)</button>
       </div>
 
       <div id="lobby-slots" class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="bg-red-950/10 border border-red-900/20 p-5 rounded-2xl space-y-3">
-          <h3 class="text-center font-bold text-red-400">🔴 RED FACTION</h3>
+          <h3 class="text-center font-bold text-red-400 font-hud">🔴 RED FACTION</h3>
           <div onclick="selectSlot('RED_SPYMASTER')" id="slot-RED_SPYMASTER" class="bg-slate-900 p-3 rounded-xl border border-dashed border-red-500/20 cursor-pointer text-center text-sm hover:bg-slate-800">암호 출제 팀장</div>
           <div onclick="selectSlot('RED_LEADER')" id="slot-RED_LEADER" class="bg-slate-900 p-3 rounded-xl border border-red-500/40 text-yellow-400 font-bold cursor-pointer text-center text-sm hover:bg-slate-800">🎯 최종 선택자 (클릭 권한자)</div>
           <div id="slots-red-operatives" class="space-y-2"></div>
         </div>
         <div class="bg-blue-950/10 border border-blue-900/20 p-5 rounded-2xl space-y-3">
-          <h3 class="text-center font-bold text-blue-400">🔵 BLUE FACTION</h3>
+          <h3 class="text-center font-bold text-blue-400 font-hud">🔵 BLUE FACTION</h3>
           <div onclick="selectSlot('BLUE_SPYMASTER')" id="slot-BLUE_SPYMASTER" class="bg-slate-900 p-3 rounded-xl border border-dashed border-blue-500/20 cursor-pointer text-center text-sm hover:bg-slate-800">암호 출제 팀장</div>
           <div onclick="selectSlot('BLUE_LEADER')" id="slot-BLUE_LEADER" class="bg-slate-900 p-3 rounded-xl border border-blue-500/40 text-yellow-400 font-bold cursor-pointer text-center text-sm hover:bg-slate-800">🎯 최종 선택자 (클릭 권한자)</div>
           <div id="slots-blue-operatives" class="space-y-2"></div>
@@ -124,27 +134,31 @@
         <div id="spymaster-action-bar" class="hidden bg-slate-900 border border-yellow-500/40 p-4 rounded-2xl flex flex-wrap gap-4 items-center justify-between shadow-lg">
           <div class="flex items-center space-x-3">
             <span class="text-yellow-400 text-sm font-bold">🎙️ 암호 전송 장치 :</span>
-            <input type="text" id="clue-word" class="bg-slate-950 border border-slate-700 rounded-xl p-2 text-sm text-white outline-none focus:border-yellow-500 w-44" placeholder="연상 단어 입력">
-            <div class="flex items-center bg-slate-950 border border-slate-700 rounded-xl px-2">
+            <input type="text" id="clue-word" class="bg-slate-950 border border-slate-700 rounded-xl p-2 text-sm text-white outline-none focus:border-yellow-500 w-44 font-sans" placeholder="연상 단어 입력">
+            <div class="flex items-center bg-slate-950 border border-slate-700 rounded-xl px-2 font-hud">
               <span class="text-xs text-slate-500 font-bold mr-1">개수:</span>
               <input type="number" id="clue-count" class="bg-transparent p-2 text-sm text-white w-12 outline-none text-center" value="1" min="1" max="9">
             </div>
           </div>
-          <button onclick="submitClue()" class="bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950 font-title px-6 py-2.5 rounded-xl text-sm transition shadow-md">송신 개시</button>
+          <button onclick="submitClue()" class="bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-sm shadow-md font-hud">SEND CLUE</button>
         </div>
 
         <div id="clue-briefing-bar" class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
           <div class="flex items-center space-x-3 w-full sm:w-auto">
             <div class="w-2 h-8 bg-amber-500 rounded-full"></div>
             <div>
-              <span class="block text-[10px] text-slate-500 font-bold">MISSION BRIEFING</span>
-              <p id="text-current-clue-premium" class="text-xl font-title text-slate-200">신호 조율 중...</p>
+              <span class="block text-[10px] text-slate-500 font-bold font-hud">MISSION BRIEFING</span>
+              <p id="text-current-clue-premium" class="text-xl text-slate-200 tracking-wider">신호 조율 중...</p>
             </div>
           </div>
-          <button id="btn-skip-guess" onclick="skipGuess()" class="hidden w-full sm:w-auto bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold px-5 py-2 rounded-xl text-sm transition">추리 종료 (Pass)</button>
+          <button id="btn-skip-guess" onclick="skipGuess()" class="hidden w-full sm:w-auto bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold px-5 py-2 rounded-xl text-sm transition font-hud tracking-wider">PASS TURN</button>
         </div>
 
         <div id="grid-container" class="word-grid"></div>
+
+        <div id="post-game-timer-bar" class="hidden bg-slate-900 border border-red-500/20 p-3 rounded-xl text-center shadow-lg animate-pulse">
+          <p class="text-sm font-hud text-red-400 tracking-wider">⚠️ 작전이 종료되었습니다! <span id="post-game-seconds" class="font-black text-xl text-yellow-400 mx-1">15</span>초 후에 엔딩 현황 오버레이 스크린으로 자동 전환됩니다. (사진을 감상하세요)</p>
+        </div>
       </div>
     </div>
   </div>
@@ -153,6 +167,7 @@
     const socket = io(); 
     let myId = null; 
     let roomState = null;
+    let hasEndTriggered = false; // 15초 딜레이 중복 가동 방지 락 플래그
 
     const neutralImages = ['mh2.jpg', 'mh4.jpg', 'mh9.jpg', 'mh11.jpg'];
 
@@ -200,10 +215,10 @@
       turnText.innerText = room.gameState.turn + " TURN";
       if(room.gameState.turn === 'RED') {
         turnIndicator.className = "px-4 py-1 rounded-lg text-center bg-red-950/40 border border-red-500/20";
-        turnText.className = "text-base font-title text-red-400";
+        turnText.className = "text-base font-bold text-red-400";
       } else {
         turnIndicator.className = "px-4 py-1 rounded-lg text-center bg-blue-950/40 border border-blue-500/20";
-        turnText.className = "text-base font-title text-blue-400";
+        turnText.className = "text-base font-bold text-blue-400";
       }
 
       document.getElementById('display-status').innerText = `상태: ${room.gameState.phase}`;
@@ -213,6 +228,9 @@
       if (room.gameState.phase === 'LOBBY') {
         document.getElementById('lobby-slots').classList.remove('hidden');
         document.getElementById('ingame-board').classList.add('hidden');
+        document.getElementById('game-over-overlay').classList.add('hidden');
+        document.getElementById('post-game-timer-bar').classList.add('hidden');
+        hasEndTriggered = false; // 대기실 복귀 시 플래그 리셋
         renderLobbySlots(room);
       } else {
         document.getElementById('lobby-slots').classList.add('hidden');
@@ -273,12 +291,10 @@
       const currentLeader = room.gameState.turn === 'RED' ? room.slots.RED_LEADER : room.slots.BLUE_LEADER;
       const amILeaderOfCurrentTurn = (currentLeader === myId);
       
-      // 내 팀 세션 구하기
       const isMyTeamRed = (room.slots.RED_SPYMASTER === myId || room.slots.RED_LEADER === myId || room.slots.RED_OPERATIVES.includes(myId));
       const isMyTeamBlue = (room.slots.BLUE_SPYMASTER === myId || room.slots.BLUE_LEADER === myId || room.slots.BLUE_OPERATIVES.includes(myId));
       const isMyTeamTurn = room.gameState.turn === (isMyTeamRed ? 'RED' : isMyTeamBlue ? 'BLUE' : 'SPECTATOR');
 
-      // 💡 [버그 수정 완료] 출제 대기(CLUE_WAITING) 상태이고, 내가 현재 턴의 '팀장'인 경우에만 입력창 해제
       const actionBar = document.getElementById('spymaster-action-bar');
       if (room.gameState.phase === 'CLUE_WAITING' && amISpymaster && isMyTeamTurn) {
         actionBar.classList.remove('hidden');
@@ -294,7 +310,7 @@
       else { briefcaseBar.className = "bg-slate-900 border border-blue-800/40 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4"; }
 
       if (room.gameState.phase === 'GUESSING') {
-        briefingText.innerHTML = `📢 암호: <span class="text-amber-300 font-black px-2 py-0.5 bg-amber-400/10 rounded">${room.gameState.currentClue.word}</span> ➡️ <span class="text-amber-400">${room.gameState.currentClue.count}개</span> <span class="text-xs text-slate-400"> (성공: ${room.gameState.currentClue.guessedCount}개)</span>`;
+        briefingText.innerHTML = `📢 암호: <span class="text-amber-300 font-black px-2 py-0.5 bg-amber-400/10 rounded font-hud">${room.gameState.currentClue.word}</span> ➡️ <span class="text-amber-400 font-hud">${room.gameState.currentClue.count}개</span> <span class="text-xs text-slate-400 font-sans"> (성공: ${room.gameState.currentClue.guessedCount}개)</span>`;
         if(amILeaderOfCurrentTurn) passBtn.classList.remove('hidden');
         else passBtn.classList.add('hidden');
       } else {
@@ -307,13 +323,14 @@
 
       room.words.forEach(card => {
         const cardBtn = document.createElement('button');
-        cardBtn.className = `aspect-[4/3] rounded-2xl font-title text-center flex flex-col justify-center items-center text-sm md:text-lg border transition-all duration-300 transform shadow-md relative overflow-hidden`;
+        // 💡 겹침 해소용 tracking-widest 및 폰트 2xl 사이즈로 가독성 끝판왕 세팅
+        cardBtn.className = `aspect-[4/3] rounded-2xl text-xl md:text-2xl tracking-widest text-center flex flex-col justify-center items-center border transition-all duration-300 transform shadow-md relative overflow-hidden`;
 
         const activeType = (card.isRevealed || amISpymaster) ? card.type : 'UNKNOWN';
 
         if (activeType === 'RED') cardBtn.className += card.isRevealed ? ' bg-red-600 border-red-500' : ' bg-red-950/70 text-red-300 border-red-900/60 hover:bg-red-900';
         else if (activeType === 'BLUE') cardBtn.className += card.isRevealed ? ' bg-blue-600 border-blue-500' : ' bg-blue-950/70 text-blue-300 border-blue-900/60 hover:bg-blue-900';
-        else if (activeType === 'NEUTRAL') cardBtn.className += card.isRevealed ? ' bg-orange-100 text-slate-900' : ' bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700';
+        else if (activeType === 'NEUTRAL') cardBtn.className += card.isRevealed ? ' bg-orange-100 text-slate-900 font-bold' : ' bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700';
         else if (activeType === 'ASSASSIN') cardBtn.className += card.isRevealed ? ' bg-black border-red-600 ring-4 ring-red-600/50' : ' bg-slate-900 text-slate-600 border-red-950 hover:text-red-400';
         else cardBtn.className += ' bg-slate-900 text-slate-100 border-slate-800 hover:border-indigo-500/40 hover:-translate-y-1 hover:shadow-lg';
 
@@ -332,7 +349,8 @@
 
           const wordSpan = document.createElement('span');
           wordSpan.innerText = card.text;
-          wordSpan.className = 'relative z-10 font-black text-white text-base md:text-xl line-through drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]';
+          // 💡 text-stroke 외곽선 셰이더 주입해서 'ㄹ' 뭉개짐이나 사진 배경 간섭 완벽하게 차단
+          wordSpan.className = 'relative z-10 font-black text-white text-xl md:text-2xl line-through text-stroke';
           cardBtn.appendChild(wordSpan);
         } else {
           cardBtn.innerText = card.text;
@@ -346,34 +364,60 @@
           if(!card.isRevealed) cardBtn.className += ' opacity-70';
         }
 
-        if (card.isRevealed) cardBtn.className += ' brightness-[0.6] scale-95';
+        if (card.isRevealed) cardBtn.className += ' brightness-[0.75] scale-95';
         gridContainer.appendChild(cardBtn);
       });
 
-      if (room.gameState.phase === 'ENDED') {
-        const overlay = document.getElementById('game-over-overlay');
-        const title = document.getElementById('overlay-title');
-        const img = document.getElementById('overlay-img');
+      // 💡 [피드백 반영] 게임 엔드 터지면 15초 슬립 딜레이 돌려주기
+      if (room.gameState.phase === 'ENDED' && !hasEndTriggered) {
+        hasEndTriggered = true; 
+        
+        const timerBar = document.getElementById('post-game-timer-bar');
+        const secondsSpan = document.getElementById('post-game-seconds');
+        timerBar.classList.remove('hidden');
 
-        let myTeam = 'SPECTATOR';
-        if (isMyTeamRed) myTeam = 'RED';
-        if (isMyTeamBlue) myTeam = 'BLUE';
+        let leftSeconds = 15;
+        secondsSpan.innerText = leftSeconds;
 
-        overlay.classList.remove('hidden');
+        const postGameInterval = setInterval(() => {
+          leftSeconds -= 1;
+          secondsSpan.innerText = leftSeconds;
 
-        if (room.gameState.winner === myTeam) {
-          title.innerText = `🎉 OPERATION VICTORY (${room.gameState.winner} TEAM WIN) 🎉`;
-          title.className = "text-5xl font-title text-emerald-400 tracking-wider animate-bounce";
-          img.src = '/img/win/mh0.jpg'; 
-        } else if (myTeam === 'SPECTATOR') {
-          title.innerText = `🚨 GAME OVER (${room.gameState.winner} FACTION WIN) 🚨`;
-          title.className = "text-5xl font-title text-indigo-400 tracking-wider";
-          img.src = '/img/win/mh0.jpg';
-        } else {
-          title.innerText = `💀 MISSION FAILED (${room.gameState.winner} TEAM WIN) 💀`;
-          title.className = "text-5xl font-title text-rose-500 tracking-wider";
-          img.src = '/img/lose/mh10.jpg'; 
-        }
+          if (leftSeconds <= 0) {
+            clearInterval(postGameInterval);
+            timerBar.classList.add('hidden');
+            
+            // 15초 째깍이 끝나면 비소로 웅장해진 오버레이 팝업 표출
+            triggerFullscreenOverlay(room, isMyTeamRed, isMyTeamBlue);
+          }
+        }, 1000);
+      }
+    }
+
+    // 전면 오버레이 액티베이터
+    function triggerFullscreenOverlay(room, isMyTeamRed, isMyTeamBlue) {
+      const overlay = document.getElementById('game-over-overlay');
+      const title = document.getElementById('overlay-title');
+      const img = document.getElementById('overlay-img');
+
+      let myTeam = 'SPECTATOR';
+      if (isMyTeamRed) myTeam = 'RED';
+      if (isMyTeamBlue) myTeam = 'BLUE';
+
+      overlay.classList.remove('hidden');
+
+      if (room.gameState.winner === myTeam) {
+        title.innerText = `🎉 OPERATION VICTORY (${room.gameState.winner} TEAM WIN) 🎉`;
+        title.className = "text-3xl sm:text-5xl font-hud text-emerald-400 tracking-widest animate-bounce leading-tight";
+        img.src = '/img/win/mh0.jpg'; 
+      } else if (myTeam === 'SPECTATOR') {
+        title.innerText = `🚨 GAME OVER (${room.gameState.winner} FACTION WIN) 🚨`;
+        title.className = "text-3xl sm:text-5xl font-hud text-indigo-400 tracking-widest leading-tight";
+        img.src = '/img/win/mh0.jpg';
+      } else {
+        title.innerText = `💀 MISSION FAILED (${room.gameState.winner} TEAM WIN) 💀`;
+        title.className = "text-3xl sm:text-5xl font-hud text-rose-500 tracking-widest leading-tight";
+        img.src = '/img/lose/mh10.jpg'; 
       }
     }
 
