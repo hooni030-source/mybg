@@ -5,9 +5,18 @@ const { Server } = require('socket.io');
 const { CODENAMES_WORDS_1000 } = require('./data/words');
 
 const app = express();
+app.use(express.static('public'));
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
+// Render 환경에서는 외부 연결을 유연하게 받아줘야 포트 통신이 뚫려
+const io = new Server(server, { 
+  cors: { 
+    origin: "*", 
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'] 
+});
 const rooms = {};
 const roomIntervals = {};
 

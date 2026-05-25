@@ -14,18 +14,29 @@
     @media (max-width: 640px) { .word-grid { gap: 0.35rem; } }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-game tracking-wide">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-game tracking-wide relative">
+
+  <div id="game-over-overlay" class="hidden fixed inset-0 z-50 bg-black/90 flex flex-col justify-center items-center p-4 backdrop-blur-md">
+    <div class="max-w-xl w-full text-center space-y-6">
+      <h1 id="overlay-title" class="text-5xl font-title tracking-wider animate-bounce">RED FACTION WIN</h1>
+      <div class="border-4 border-slate-700 rounded-2xl overflow-hidden shadow-2xl aspect-[4/3] bg-slate-950">
+        <img id="overlay-img" src="" class="w-full h-full object-cover">
+      </div>
+      <p id="overlay-desc" class="text-slate-400 text-lg font-sans">작전이 종료되었습니다. 로비로 이동하려면 새로고침 하세요.</p>
+    </div>
+  </div>
 
   <div id="app" class="container mx-auto p-4 max-w-5xl">
+    
     <div id="view-login" class="max-w-md mx-auto my-24 bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl">
       <h1 class="text-4xl font-title text-center mb-8 bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">🕵️‍♂️ CODENAMES</h1>
       <div class="space-y-5">
         <div>
           <label class="block text-xs font-bold text-slate-400 mb-2">요원 닉네임</label>
-          <input type="text" id="input-nickname" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white outline-none" placeholder="이름을 입력하세요">
+          <input type="text" id="input-nickname" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white outline-none" placeholder="이름이나 별명을 입력하세요">
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-400 mb-2">작전 룸 코드 (선택)</label>
+          <label class="block text-xs font-bold text-slate-400 mb-2">작전 룸 코드 (비워두면 새로 개설)</label>
           <input type="text" id="input-roomid" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white uppercase outline-none" placeholder="예: FW12">
         </div>
         <button onclick="joinRoom()" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-3 rounded-xl transition transform active:scale-95 shadow-lg">작전지 진입</button>
@@ -39,9 +50,13 @@
             <span class="block text-[10px] text-slate-500 font-bold">ROOM CODE</span>
             <span id="display-room-id" class="text-xl font-mono font-bold text-indigo-400 select-all">----</span>
           </div>
+          <div class="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800">
+            <span class="block text-[10px] text-amber-400 font-bold">MY CODE NAME</span>
+            <span id="display-my-nickname" class="text-base font-bold text-slate-200">불러오는 중...</span>
+          </div>
           <div>
             <div id="role-badge" class="inline-block text-[11px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400 mb-1">관전자</div>
-            <p id="display-status" class="text-xs text-slate-400 font-sans">연결 동기화 대기 중...</p>
+            <p id="display-status" class="text-xs text-slate-400 font-sans">연결 동기화 중...</p>
           </div>
         </div>
         
@@ -131,29 +146,43 @@
   </div>
 
   <script>
-    const socket = io('http://127.0.0.1:4000');
-    let myId = null; let roomState = null;
+    const socket = io(); 
+    let myId = null; 
+    let roomState = null;
+
+    // 중립 카드 4장 파일명 고정 배열
+    const neutralImages = ['mh2.jpg', 'mh4.jpg', 'mh9.jpg', 'mh11.jpg'];
+
+    document.getElementById('view-login').classList.remove('hidden');
+    document.getElementById('view-game').classList.add('hidden');
 
     function joinRoom() {
       const nickname = document.getElementById('input-nickname').value.trim();
-      const roomId = document.getElementById('input-roomid').value.trim();
-      if(!nickname) return alert("요원명을 채워주세요.");
+      let roomId = document.getElementById('input-roomid').value.trim();
+      if(!nickname) return alert("요원 네임(별명)을 기입해 주세요!");
+      if(!roomId) roomId = null;
       socket.emit('join_room', { roomId, nickname });
-      document.getElementById('view-login').classList.add('hidden');
-      document.getElementById('view-game').classList.remove('hidden');
     }
 
-    socket.on('room_joined', (data) => { myId = data.myId; document.getElementById('display-room-id').innerText = data.roomId; });
+    socket.on('room_joined', (data) => {
+      myId = data.myId;
+      document.getElementById('display-room-id').innerText = data.roomId;
+      document.getElementById('view-login').classList.add('hidden');
+      document.getElementById('view-game').classList.remove('hidden');
+    });
 
     socket.on('update_room', (room) => {
-      roomState = room; const me = room.players[myId];
+      roomState = room; 
+      const me = room.players[myId];
+      if(!me) return;
+
+      document.getElementById('display-my-nickname').innerText = me.nickname;
       
       const redLeft = room.words.filter(w => w.type === 'RED' && !w.isRevealed).length;
       const blueLeft = room.words.filter(w => w.type === 'BLUE' && !w.isRevealed).length;
       document.getElementById('score-red').innerText = room.words.length ? redLeft : 9;
       document.getElementById('score-blue').innerText = room.words.length ? blueLeft : 8;
 
-      // 역할 배지 세분화 노출
       const badge = document.getElementById('role-badge');
       if(room.slots.RED_SPYMASTER === myId) badge.innerText = "🔴 RED 팀장";
       else if(room.slots.RED_LEADER === myId) badge.innerText = "🎯 RED 선택자";
@@ -238,24 +267,19 @@
       const isBlueSpy = room.slots.BLUE_SPYMASTER === myId;
       const amISpymaster = isRedSpy || isBlueSpy;
       
-      // [동적 판단 권한 체크] 내가 현재 턴의 '선택자'인가?
       const currentLeader = room.gameState.turn === 'RED' ? room.slots.RED_LEADER : room.slots.BLUE_LEADER;
       const amILeaderOfCurrentTurn = (currentLeader === myId);
-
       const isMyTeamTurn = room.gameState.turn === (isRedSpy || room.slots.RED_LEADER === myId || room.slots.RED_OPERATIVES.includes(myId) ? 'RED' : 'BLUE');
 
-      if (room.gameState.phase === 'CLUE_WAITING' && amISpymaster && isMyTeamTurn) {
-        document.getElementById('spymaster-action-bar').classList.remove('hidden');
-      } else {
-        document.getElementById('spymaster-action-bar').classList.add('hidden');
-      }
-
+      const briefcaseBar = document.getElementById('clue-briefing-bar');
       const briefingText = document.getElementById('text-current-clue-premium');
       const passBtn = document.getElementById('btn-skip-guess');
       
+      if(room.gameState.turn === 'RED') { briefcaseBar.className = "bg-slate-900 border border-red-800/40 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4"; }
+      else { briefcaseBar.className = "bg-slate-900 border border-blue-800/40 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4"; }
+
       if (room.gameState.phase === 'GUESSING') {
-        briefingText.innerHTML = `📢 암호: <span class="text-yellow-400 font-black px-2 py-0.5 bg-yellow-400/10 rounded">${room.gameState.currentClue.word}</span> ➡️ <span class="text-amber-400">${room.gameState.currentClue.count}개</span> <span class="text-xs text-slate-400"> (매칭: ${room.gameState.currentClue.guessedCount}개)</span>`;
-        // 패스 버튼도 오직 현재 턴의 선택자에게만 노출
+        briefingText.innerHTML = `📢 암호: <span class="text-amber-300 font-black px-2 py-0.5 bg-amber-400/10 rounded">${room.gameState.currentClue.word}</span> ➡️ <span class="text-amber-400">${room.gameState.currentClue.count}개</span> <span class="text-xs text-slate-400"> (성공: ${room.gameState.currentClue.guessedCount}개)</span>`;
         if(amILeaderOfCurrentTurn) passBtn.classList.remove('hidden');
         else passBtn.classList.add('hidden');
       } else {
@@ -268,31 +292,86 @@
 
       room.words.forEach(card => {
         const cardBtn = document.createElement('button');
-        cardBtn.className = `aspect-[4/3] p-3 rounded-2xl font-title text-center flex flex-col justify-center items-center text-sm md:text-lg border transition-all shadow-md`;
-        cardBtn.innerText = card.text;
+        cardBtn.className = `aspect-[4/3] rounded-2xl font-title text-center flex flex-col justify-center items-center text-sm md:text-lg border transition-all duration-300 transform shadow-md relative overflow-hidden`;
 
         const activeType = (card.isRevealed || amISpymaster) ? card.type : 'UNKNOWN';
 
-        if (activeType === 'RED') cardBtn.className += card.isRevealed ? ' bg-red-600 text-white border-red-500' : ' bg-red-950/70 text-red-300 border-red-900/60';
-        else if (activeType === 'BLUE') cardBtn.className += card.isRevealed ? ' bg-blue-600 text-white border-blue-500' : ' bg-blue-950/70 text-blue-300 border-blue-900/60';
-        else if (activeType === 'NEUTRAL') cardBtn.className += card.isRevealed ? ' bg-orange-100 text-slate-900' : ' bg-slate-800 text-slate-400 border-slate-700';
-        else if (activeType === 'ASSASSIN') cardBtn.className += card.isRevealed ? ' bg-black text-red-600 border-red-600 font-black' : ' bg-slate-900 text-slate-600 border-red-950';
-        else cardBtn.className += ' bg-slate-900 text-slate-100 border-slate-800 hover:border-indigo-500/40 hover:-translate-y-0.5';
+        if (activeType === 'RED') cardBtn.className += card.isRevealed ? ' bg-red-600 border-red-500' : ' bg-red-950/70 text-red-300 border-red-900/60 hover:bg-red-900';
+        else if (activeType === 'BLUE') cardBtn.className += card.isRevealed ? ' bg-blue-600 border-blue-500' : ' bg-blue-950/70 text-blue-300 border-blue-900/60 hover:bg-blue-900';
+        else if (activeType === 'NEUTRAL') cardBtn.className += card.isRevealed ? ' bg-orange-100 text-slate-900' : ' bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700';
+        else if (activeType === 'ASSASSIN') cardBtn.className += card.isRevealed ? ' bg-black border-red-600 ring-4 ring-red-600/50' : ' bg-slate-900 text-slate-600 border-red-950 hover:text-red-400';
+        else cardBtn.className += ' bg-slate-900 text-slate-100 border-slate-800 hover:border-indigo-500/40 hover:-translate-y-1 hover:shadow-lg';
 
-        // [클릭 권한 변경] 추리 페이즈 + 오직 현재 턴의 '선택자(Leader)'만 카드 클릭 활성화
+        // 💡 [핵심] 보내준 폴더명 및 파일 구조 100% 반영 매핑 로직
+        if (card.isRevealed) {
+          const img = document.createElement('img');
+          const randIdx = card.id % 5;
+          const neutralRandIdx = card.id % 4;
+
+          if (card.type === 'RED') {
+            img.src = `/img/redteam/red_${randIdx}.jpg`; // redteam 폴더 내 매핑
+          } else if (card.type === 'BLUE') {
+            img.src = `/img/blueteam/blue_${randIdx}.jpg`; // blueteam 폴더 내 매핑
+          } else if (card.type === 'NEUTRAL') {
+            img.src = `/img/neutral/${neutralImages[neutralRandIdx]}`; // neutral 폴더 내 분기 매핑
+          } else if (card.type === 'ASSASSIN') {
+            img.src = `/img/assasin/mh6.jpg`; // assasin 폴더 내 고정 매핑
+          }
+
+          // object-cover 속성으로 해상도 무관 비율 강제 완벽 유지
+          img.className = 'absolute inset-0 w-full h-full object-cover rounded-2xl brightness-[0.4]';
+          cardBtn.appendChild(img);
+
+          const wordSpan = document.createElement('span');
+          wordSpan.innerText = card.text;
+          wordSpan.className = 'relative z-10 font-black text-white text-base md:text-xl line-through drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]';
+          cardBtn.appendChild(wordSpan);
+        } else {
+          cardBtn.innerText = card.text;
+        }
+
         if (room.gameState.phase === 'GUESSING' && amILeaderOfCurrentTurn && !card.isRevealed) {
           cardBtn.onclick = () => socket.emit('click_card', { roomId: room.roomId, cardId: card.id });
           cardBtn.className += ' cursor-pointer';
         } else {
           cardBtn.className += ' cursor-not-allowed';
-          if(!card.isRevealed) cardBtn.className += ' opacity-60';
+          if(!card.isRevealed) cardBtn.className += ' opacity-70';
         }
 
-        if (card.isRevealed) cardBtn.className += ' brightness-[0.35] scale-95 line-through';
+        if (card.isRevealed) cardBtn.className += ' brightness-[0.6] scale-95';
         gridContainer.appendChild(cardBtn);
       });
 
-      if (room.gameState.phase === 'ENDED') alert(`🚨 미션 종료 🚨\n승리: [ ${room.gameState.winner} FACTION ]`);
+      // 💡 [대망의 연출] 내 팀 세션 판정에 따른 전면 스크린 배너 제어
+      if (room.gameState.phase === 'ENDED') {
+        const overlay = document.getElementById('game-over-overlay');
+        const title = document.getElementById('overlay-title');
+        const img = document.getElementById('overlay-img');
+
+        // 내가 속한 팀 구하기 (팀장 혹은 선택자/일반요원 배열 매핑)
+        const isMyTeamRed = (room.slots.RED_SPYMASTER === myId || room.slots.RED_LEADER === myId || room.slots.RED_OPERATIVES.includes(myId));
+        const isMyTeamBlue = (room.slots.BLUE_SPYMASTER === myId || room.slots.BLUE_LEADER === myId || room.slots.BLUE_OPERATIVES.includes(myId));
+        
+        let myTeam = 'SPECTATOR';
+        if (isMyTeamRed) myTeam = 'RED';
+        if (isMyTeamBlue) myTeam = 'BLUE';
+
+        overlay.classList.remove('hidden');
+
+        if (room.gameState.winner === myTeam) {
+          title.innerText = `🎉 OPERATION VICTORY (${room.gameState.winner} TEAM WIN) 🎉`;
+          title.className = "text-5xl font-title text-emerald-400 tracking-wider animate-bounce";
+          img.src = '/img/win/mh0.jpg'; // 승리 사진 로드
+        } else if (myTeam === 'SPECTATOR') {
+          title.innerText = `🚨 GAME OVER (${room.gameState.winner} FACTION WIN) 🚨`;
+          title.className = "text-5xl font-title text-indigo-400 tracking-wider";
+          img.src = '/img/win/mh0.jpg';
+        } else {
+          title.innerText = `💀 MISSION FAILED (${room.gameState.winner} TEAM WIN) 💀`;
+          title.className = "text-5xl font-title text-rose-500 tracking-wider";
+          img.src = '/img/lose/mh10.jpg'; // 패배 사진 로드
+        }
+      }
     }
 
     function submitClue() {
