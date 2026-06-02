@@ -33,6 +33,22 @@ function getRandomWords(count) {
   return shuffled.slice(0, count);
 }
 
+// 💡 슬롯 규격을 maxPlayers 세팅에 맞춰 엄격하게 강제 보정해주는 유틸 함수 정의
+function enforceSlotStructure(room) {
+  const maxPlayers = room.config.maxPlayers || 8;
+  // 팀장 2명 + 최종선택자 2명 = 4명을 뺀 나머지가 일반 요원(Operatives)의 몫
+  const opCount = Math.max(0, Math.floor((maxPlayers - 4) / 2));
+
+  if (!room.slots.RED_OPERATIVES) room.slots.RED_OPERATIVES = [];
+  if (!room.slots.BLUE_OPERATIVES) room.slots.BLUE_OPERATIVES = [];
+
+  // 모자라면 빈 슬롯 채우고, 넘치면 잘라내서 정원 불일치 원천 차단
+  while (room.slots.RED_OPERATIVES.length < opCount) room.slots.RED_OPERATIVES.push(null);
+  while (room.slots.RED_OPERATIVES.length > opCount) room.slots.RED_OPERATIVES.pop();
+  while (room.slots.BLUE_OPERATIVES.length < opCount) room.slots.BLUE_OPERATIVES.push(null);
+  while (room.slots.BLUE_OPERATIVES.length > opCount) room.slots.BLUE_OPERATIVES.pop();
+}
+
 io.on('connection', (socket) => {
   
   socket.on('request_reconnect', ({ roomId, userToken }) => {
@@ -63,13 +79,15 @@ io.on('connection', (socket) => {
           RED_SPYMASTER: null, RED_LEADER: null, RED_OPERATIVES: [],
           BLUE_SPYMASTER: null, BLUE_LEADER: null, BLUE_OPERATIVES: []
         },
-        config: { maxPlayers: 8 }, 
+        config: { maxPlayers: 8 }, // 기본값 8인 세팅
         words: [],
         gameState: { turn: 'RED', phase: 'LOBBY', currentClue: null, winner: null },
         timerSettings: { clueTimeLimit: 60, guessTimeLimit: 90 },
         timer: 0,
         timerInterval: null
       };
+      // 초기 개설 시 슬롯 레이아웃 동기화
+      enforceSlotStructure(rooms[targetRoomId]);
     }
 
     const room = rooms[targetRoomId];
@@ -95,7 +113,7 @@ io.on('connection', (socket) => {
     const playerToken = Object.keys(room.players).find(t => room.players[t].socketId === socket.id);
     if (!playerToken) return;
 
-    // 슬롯 대청소
+    // 슬롯 변경 전 대청소
     if (room.slots.RED_SPYMASTER === playerToken) room.slots.RED_SPYMASTER = null;
     if (room.slots.BLUE_SPYMASTER === playerToken) room.slots.BLUE_SPYMASTER = null;
     if (room.slots.RED_LEADER === playerToken) room.slots.RED_LEADER = null;
@@ -103,7 +121,9 @@ io.on('connection', (socket) => {
     if (room.slots.RED_OPERATIVES) room.slots.RED_OPERATIVES = room.slots.RED_OPERATIVES.map(v => v === playerToken ? null : v);
     if (room.slots.BLUE_OPERATIVES) room.slots.BLUE_OPERATIVES = room.slots.BLUE_OPERATIVES.map(v => v === playerToken ? null : v);
 
-    // SPECTATOR 지광 이동이 아니면 새 슬롯 정착
+    // 슬롯 강제 보정 후 안착
+    enforceSlotStructure(room);
+
     if (slotType !== 'SPECTATOR') {
       if (slotType === 'RED_SPYMASTER' && !room.slots.RED_SPYMASTER) room.slots.RED_SPYMASTER = playerToken;
       else if (slotType === 'BLUE_SPYMASTER' && !room.slots.BLUE_SPYMASTER) room.slots.BLUE_SPYMASTER = playerToken;
@@ -123,6 +143,8 @@ io.on('connection', (socket) => {
     const playerToken = Object.keys(room.players).find(t => room.players[t].socketId === socket.id);
     if (!playerToken || !room.players[playerToken].isHost) return;
 
+    enforceSlotStructure(room);
+
     const arr = slotType === 'RED_OPERATIVES' ? room.slots.RED_OPERATIVES : room.slots.BLUE_OPERATIVES;
     if (arr[index] === 'LOCKED') { arr[index] = null; } 
     else if (!arr[index]) { arr[index] = 'LOCKED'; }
@@ -136,17 +158,9 @@ io.on('connection', (socket) => {
     const playerToken = Object.keys(room.players).find(t => room.players[t].socketId === socket.id);
     if (!playerToken || !room.players[playerToken].isHost) return;
     
-    room.config.maxPlayers = maxPlayers;
-    const opCount = Math.floor((maxPlayers - 4) / 2);
-    
-    // 4인 모드면 알아서 빈 배열로 청소됨
-    if (!room.slots.RED_OPERATIVES) room.slots.RED_OPERATIVES = [];
-    if (!room.slots.BLUE_OPERATIVES) room.slots.BLUE_OPERATIVES = [];
-
-    while(room.slots.RED_OPERATIVES.length < opCount) room.slots.RED_OPERATIVES.push(null);
-    while(room.slots.RED_OPERATIVES.length > opCount) room.slots.RED_OPERATIVES.pop();
-    while(room.slots.BLUE_OPERATIVES.length < opCount) room.slots.BLUE_OPERATIVES.push(null);
-    while(room.slots.BLUE_OPERATIVES.length > opCount) room.slots.BLUE_OPERATIVES.pop();
+    room.config.maxPlayers = parseInt(maxPlayers, 10);
+    // 💡 셀렉트 박스 바꿀 때 즉시 슬롯 개수 늘리고 줄여서 프론트와 완벽 동기화
+    enforceSlotStructure(room);
 
     io.to(roomId).emit('update_room', room);
   });
@@ -158,7 +172,7 @@ io.on('connection', (socket) => {
     const playerToken = Object.keys(room.players).find(t => room.players[t].socketId === socket.id);
     if (!playerToken || !room.players[playerToken].isHost) return;
 
-    room.timerSettings = { clueTimeLimit, guessTimeLimit };
+    room.timerSettings = { clueTimeLimit: parseInt(clueTimeLimit, 10), guessTimeLimit: parseInt(guessTimeLimit, 10) };
     io.to(roomId).emit('update_room', room);
   });
 
@@ -169,7 +183,10 @@ io.on('connection', (socket) => {
     const playerToken = Object.keys(room.players).find(t => room.players[t].socketId === socket.id);
     if (!playerToken || !room.players[playerToken].isHost) return;
 
-    // 💡 억까 락 해제: 매판 완벽하게 25개 카드를 재생성하여 인게임 브로드캐스팅 개시
+    // 💡 시작 버튼 누를 때 다시 한 번 현재 설정된 정원에 맞게 오퍼레이티브 슬롯 구조를 한 번 더 체크 및 정제
+    enforceSlotStructure(room);
+
+    // 25개 랜덤 카드 생성 가동
     const selectedWords = getRandomWords(25);
     const types = [
       ...Array(9).fill('RED'),
@@ -264,8 +281,11 @@ io.on('connection', (socket) => {
     room.slots.BLUE_SPYMASTER = null;
     room.slots.RED_LEADER = null;
     room.slots.BLUE_LEADER = null;
+    
+    // 로비 복귀 시 슬롯 초기화 후 구조 재확정
     if (room.slots.RED_OPERATIVES) room.slots.RED_OPERATIVES = room.slots.RED_OPERATIVES.map(v => v === 'LOCKED' ? 'LOCKED' : null);
     if (room.slots.BLUE_OPERATIVES) room.slots.BLUE_OPERATIVES = room.slots.BLUE_OPERATIVES.map(v => v === 'LOCKED' ? 'LOCKED' : null);
+    enforceSlotStructure(room);
 
     io.to(roomId).emit('update_room', room);
   });
@@ -286,6 +306,8 @@ io.on('connection', (socket) => {
             if (room.slots.BLUE_LEADER === playerToken) room.slots.BLUE_LEADER = null;
             if (room.slots.RED_OPERATIVES) room.slots.RED_OPERATIVES = room.slots.RED_OPERATIVES.map(v => v === playerToken ? null : v);
             if (room.slots.BLUE_OPERATIVES) room.slots.BLUE_OPERATIVES = room.slots.BLUE_OPERATIVES.map(v => v === playerToken ? null : v);
+
+            enforceSlotStructure(room);
 
             if (Object.keys(room.players).length === 0) {
               if (room.timerInterval) clearInterval(room.timerInterval);

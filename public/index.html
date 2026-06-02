@@ -57,7 +57,6 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-card tracking-wide relative">
 
-  <!-- 엔딩 오버레이 -->
   <div id="game-over-overlay" class="hidden fixed inset-0 z-50 bg-black/95 flex flex-col justify-center items-center p-4 backdrop-blur-md">
     <div class="max-w-3xl w-full text-center space-y-8 px-4">
       <h1 id="overlay-title" class="text-3xl sm:text-5xl font-hud tracking-widest text-emerald-400 animate-pulse uppercase block w-full leading-tight drop-shadow-[0_4px_12px_rgba(16,185,129,0.3)]">
@@ -73,7 +72,6 @@
   </div>
 
   <div id="app" class="container mx-auto p-4 max-w-5xl">
-    <!-- 1. 로그인 폼 -->
     <div id="view-login" class="max-w-md mx-auto my-24 bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl">
       <h1 class="text-4xl font-hud text-center mb-8 bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent tracking-widest">CODENAMES</h1>
       <div class="space-y-5">
@@ -89,9 +87,7 @@
       </div>
     </div>
 
-    <!-- 2. 게임 보드 본체 -->
     <div id="view-game" class="hidden space-y-6">
-      <!-- 상단 컨트롤 헤더 -->
       <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-wrap justify-between items-center shadow-xl gap-4">
         <div class="flex items-center space-x-4">
           <div class="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800 font-hud">
@@ -129,7 +125,6 @@
         </div>
       </div>
 
-      <!-- 호스트 패널 -->
       <div id="host-panel" class="hidden bg-slate-900 border border-indigo-500/20 p-5 rounded-2xl space-y-4">
         <h3 class="text-sm font-bold text-indigo-400 uppercase font-hud tracking-wider">⚙️ 호스트 작전 제어판</h3>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -154,13 +149,11 @@
         <button onclick="startGame()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold py-3 rounded-xl shadow-lg font-hud tracking-wider">⚔️ 작전 개시 (START GAME)</button>
       </div>
 
-      <!-- [LOBBY] 대기 슬롯 -->
       <div id="lobby-slots" class="grid grid-cols-1 gap-6">
         <div class="flex flex-col sm:flex-row gap-4 justify-between items-center bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md">
           <button onclick="selectSlot('SPECTATOR')" class="w-full sm:w-auto bg-slate-950 hover:bg-slate-800 text-slate-300 font-bold text-xs px-6 py-3 rounded-xl border border-slate-800 font-hud tracking-widest transform active:scale-95 transition-all">
             🕵️‍♂️ 관전자로 전환 (내 역할 내려놓기)
           </button>
-          <!-- 💡 [피드백 반영] 관전자 누가 있는지 투명하게 다 까발려주는 리얼타임 전광판 채널 -->
           <div class="text-xs text-slate-400 bg-slate-950/60 px-4 py-2.5 rounded-xl border border-slate-800/80 w-full sm:flex-1 text-left">
             <span class="text-indigo-400 font-bold font-hud mr-1">👁️ CURRENT SPECTATORS:</span>
             <span id="text-spectator-list" class="font-sans text-slate-300">없음</span>
@@ -168,14 +161,12 @@
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- RED -->
           <div class="bg-red-950/10 border border-red-900/20 p-5 rounded-2xl space-y-3">
             <h3 class="text-center font-bold text-red-400 font-hud">🔴 RED FACTION</h3>
             <div onclick="selectSlot('RED_SPYMASTER')" id="slot-RED_SPYMASTER" class="bg-slate-900 p-3 rounded-xl border border-dashed border-red-500/20 cursor-pointer text-center text-sm hover:bg-slate-800 transition">암호 출제 팀장</div>
             <div onclick="selectSlot('RED_LEADER')" id="slot-RED_LEADER" class="bg-slate-900 p-3 rounded-xl border border-red-500/40 text-yellow-400 font-bold cursor-pointer text-center text-sm hover:bg-slate-800 transition">🎯 최종 선택자 (클릭 권한자)</div>
             <div id="slots-red-operatives" class="space-y-2"></div>
           </div>
-          <!-- BLUE -->
           <div class="bg-blue-950/10 border border-blue-900/20 p-5 rounded-2xl space-y-3">
             <h3 class="text-center font-bold text-blue-400 font-hud">🔵 BLUE FACTION</h3>
             <div onclick="selectSlot('BLUE_SPYMASTER')" id="slot-BLUE_SPYMASTER" class="bg-slate-900 p-3 rounded-xl border border-dashed border-blue-500/20 cursor-pointer text-center text-sm hover:bg-slate-800 transition">암호 출제 팀장</div>
@@ -185,9 +176,7 @@
         </div>
       </div>
 
-      <!-- [IN-GAME] 인게임 보드 -->
       <div id="ingame-board" class="hidden space-y-5">
-        <!-- 팀장 출제용 컨트롤러 -->
         <div id="spymaster-action-bar" class="hidden bg-slate-900 border border-yellow-500/40 p-4 rounded-2xl flex flex-wrap gap-4 items-center justify-between shadow-lg">
           <div class="flex items-center space-x-3">
             <span class="text-yellow-400 text-sm font-bold">🎙️ 암호 전송 장치 :</span>
@@ -200,7 +189,6 @@
           <button onclick="submitClue()" class="bg-gradient-to-r from-yellow-500 to-amber-600 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-sm shadow-md font-hud">SEND CLUE</button>
         </div>
 
-        <!-- 미션 브리핑 전광판 -->
         <div id="clue-briefing-bar" class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
           <div class="flex items-center space-x-3 w-full sm:w-auto">
             <div class="w-2 h-8 bg-amber-500 rounded-full"></div>
@@ -212,10 +200,8 @@
           <button id="btn-skip-guess" onclick="skipGuess()" class="hidden w-full sm:w-auto bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold px-5 py-2 rounded-xl text-sm transition font-hud tracking-wider">PASS TURN</button>
         </div>
 
-        <!-- 카드 격자 구역 -->
         <div id="grid-container" class="word-grid perspective-container"></div>
 
-        <!-- 하단 타이머 바 -->
         <div id="post-game-timer-bar" class="hidden bg-slate-900 border border-red-500/20 p-4 rounded-2xl text-center shadow-lg animate-pulse flex flex-col sm:flex-row justify-between items-center gap-3">
           <p class="text-sm font-hud text-red-400 tracking-wider">⚠️ 작전 종료! <span id="post-game-seconds" class="font-black text-xl text-yellow-400 mx-1">15</span>초 후에 엔딩 전광판 팝업으로 이동합니다.</p>
           <button onclick="requestLobbyReturn()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs px-4 py-2 rounded-xl border border-slate-700 font-hud">⏩ 바로 로비로 복귀</button>
@@ -291,12 +277,15 @@
       document.getElementById('score-blue').innerText = room.words.length ? blueLeft : 8;
 
       const badge = document.getElementById('role-badge');
-      if(room.slots.RED_SPYMASTER === myId) badge.innerText = "🔴 RED 팀장";
-      else if(room.slots.RED_LEADER === myId) badge.innerText = "🎯 RED 선택자";
-      else if(room.slots.BLUE_SPYMASTER === myId) badge.innerText = "🔵 BLUE 팀장";
-      else if(room.slots.BLUE_LEADER === myId) badge.innerText = "🎯 BLUE 선택자";
-      else if(room.slots.RED_OPERATIVES && room.slots.RED_OPERATIVES.includes(myId)) badge.innerText = "RED 일반 요원";
-      else if(room.slots.BLUE_OPERATIVES && room.slots.BLUE_OPERATIVES.includes(myId)) badge.innerText = "BLUE 일반 요원";
+      
+      // 내 실시간 슬롯 식별 연산 변수 추가
+      let myCurrentRole = 'SPECTATOR';
+      if(room.slots.RED_SPYMASTER === myId) { badge.innerText = "🔴 RED 팀장"; myCurrentRole = 'RED_SPYMASTER'; }
+      else if(room.slots.RED_LEADER === myId) { badge.innerText = "🎯 RED 선택자"; myCurrentRole = 'RED_LEADER'; }
+      else if(room.slots.BLUE_SPYMASTER === myId) { badge.innerText = "🔵 BLUE 팀장"; myCurrentRole = 'BLUE_SPYMASTER'; }
+      else if(room.slots.BLUE_LEADER === myId) { badge.innerText = "🎯 BLUE 선택자"; myCurrentRole = 'BLUE_LEADER'; }
+      else if(room.slots.RED_OPERATIVES && room.slots.RED_OPERATIVES.includes(myId)) { badge.innerText = "RED 일반 요원"; myCurrentRole = 'RED_OPERATIVE'; }
+      else if(room.slots.BLUE_OPERATIVES && room.slots.BLUE_OPERATIVES.includes(myId)) { badge.innerText = "BLUE 일반 요원"; myCurrentRole = 'BLUE_OPERATIVE'; }
       else badge.innerText = "관전자";
 
       const turnIndicator = document.getElementById('turn-indicator');
@@ -315,7 +304,6 @@
       const maxSelect = document.getElementById('select-max-players');
       if(maxSelect && room.config && room.config.maxPlayers) maxSelect.value = room.config.maxPlayers;
 
-      // 💡 [피드백 반영] 슬롯 배정 현황 분석을 통해 진짜 순수 관전자 명단 추출 연산 가동
       const occupiedTokens = new Set([
         room.slots.RED_SPYMASTER, room.slots.BLUE_SPYMASTER,
         room.slots.RED_LEADER, room.slots.BLUE_LEADER,
@@ -330,10 +318,13 @@
       });
       document.getElementById('text-spectator-list').innerText = specNames.length > 0 ? specNames.join(', ') : '없음';
 
-      if (me.isHost && room.gameState.phase === 'LOBBY') document.getElementById('host-panel').classList.remove('hidden');
-      else document.getElementById('host-panel').classList.add('hidden');
+      // 💡 [버그 수정 포인트] 호스트 권한이 있어도 현재 역할이 '관전자(SPECTATOR)' 라면 제어판 출력을 철저히 차단
+      if (me.isHost && room.gameState.phase === 'LOBBY' && myCurrentRole !== 'SPECTATOR') {
+        document.getElementById('host-panel').classList.remove('hidden');
+      } else {
+        document.getElementById('host-panel').classList.add('hidden');
+      }
 
-      // 💡 [피드백 반영] 관전자 라이브 중계 연동 (LOBBY 단계를 제외한 모든 인게임 상황에 전원 라이브 화면 개방)
       if (room.gameState.phase === 'LOBBY') {
         document.getElementById('lobby-slots').classList.remove('hidden');
         document.getElementById('ingame-board').classList.add('hidden');
@@ -388,7 +379,6 @@
 
     function selectSlot(slotType, index = null) { socket.emit('select_slot', { roomId: roomState.roomId, slotType, index }); }
     
-    // 호스트 세팅 업데이트 바인딩
     function updateSettings() {
       if(!roomState) return;
       const maxPlayers = parseInt(document.getElementById('select-max-players').value, 10);
@@ -457,8 +447,7 @@
         }
 
         const frontNode = document.createElement('div');
-        frontNode.className = `flip-card-front text-xl md:text-2xl tracking-widest text-center font-bold border transition-all duration-300 bg-slate-900 text-slate-100 border-slate-800 shadow-md p-2`;
-        frontNode.innerText = card.text;
+        frontNode.className = `flip-card-front text-xl md:text-2xl tracking-widest text-center font-bold border transition-all duration-300 bg-slate-900 text-slate-100 border-slate-800 shadow-md p-2`; frontNode.innerText = card.text;
 
         if(!card.isRevealed && (amISpymaster || isGameEnded)) {
           if (activeType === 'RED') frontNode.className += ' bg-red-950/70 text-red-300 border-red-900/60';
@@ -467,7 +456,6 @@
           else if (activeType === 'ASSASSIN') frontNode.className += ' bg-black/80 text-red-600 border-red-950 font-black';
         }
 
-        // 클릭 연동 (관전자는 직접 클릭 발동 차단)
         if (room.gameState.phase === 'GUESSING' && amILeaderOfCurrentTurn && !card.isRevealed) {
           cardWrapper.onclick = () => socket.emit('click_card', { roomId: room.roomId, cardId: card.id });
         } else if (card.isRevealed) {
@@ -600,6 +588,7 @@
       }
     }
 
+    // 출제 신호 처리 함수
     function submitClue() {
       const word = document.getElementById('clue-word').value.trim();
       const count = document.getElementById('clue-count').value;
