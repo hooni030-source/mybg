@@ -1,4 +1,3 @@
-// server/server.js
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -6,260 +5,312 @@ const { CODENAMES_WORDS_1000 } = require('./data/words');
 
 const app = express();
 app.use(express.static('public'));
-const server = http.createServer(app);
 
-// Render 환경에서는 외부 연결을 유연하게 받아줘야 포트 통신이 뚫려
+const server = http.createServer(app);
 const io = new Server(server, { 
-  cors: { 
-    origin: "*", 
-    methods: ["GET", "POST"],
-    credentials: true
-  },
+  cors: { origin: "*", methods: ["GET", "POST"], credentials: true },
   transports: ['websocket', 'polling'] 
 });
-const rooms = {};
-const roomIntervals = {};
 
-function generateRoomId() { return Math.random().toString(36).substring(2, 6).toUpperCase(); }
-function get25RandomWords(allWords) {
-  const shuffled = [...allWords];
+const rooms = {};
+
+// 💡 [피드백 5 반영] 오직 영어 대문자 4자리로만 방 코드가 생성되도록 빌드
+function generateRoomId() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let result = '';
+  for (let i = 0; i < 4; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// Fisher-Yates 셔플 알고리즘 기반 단어 다각화 무작위 추출기
+function getRandomWords(count) {
+  const shuffled = [...CODENAMES_WORDS_1000];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  return shuffled.slice(0, 25);
-}
-function generateGameBoard(allWords) {
-  const selectedWords = get25RandomWords(allWords);
-  const types = [...Array(9).fill("RED"), ...Array(8).fill("BLUE"), ...Array(7).fill("NEUTRAL"), "ASSASSIN"];
-  for (let i = types.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [types[i], types[j]] = [types[j], types[i]];
-  }
-  return selectedWords.map((word, index) => ({ id: index, text: word, type: types[index], isRevealed: false }));
-}
-function filterBoardForOperatives(words) {
-  return words.map(card => card.isRevealed ? card : { id: card.id, text: card.text, isRevealed: false, type: "UNKNOWN" });
-}
-
-function broadcastRoomState(roomId) {
-  const room = rooms[roomId];
-  if (!room) return;
-  Object.keys(room.players).forEach(pId => {
-    const isSpymaster = (room.slots.RED_SPYMASTER === pId || room.slots.BLUE_SPYMASTER === pId);
-    if (isSpymaster) { io.to(pId).emit('update_room', room); } 
-    else { io.to(pId).emit('update_room', { ...room, words: filterBoardForOperatives(room.words) }); }
-  });
-}
-
-function startRoomTimer(roomId) {
-  if (roomIntervals[roomId]) clearInterval(roomIntervals[roomId]);
-  roomIntervals[roomId] = setInterval(() => {
-    const room = rooms[roomId];
-    if (!room || room.gameState.phase === "LOBBY" || room.gameState.phase === "ENDED") { clearInterval(roomIntervals[roomId]); return; }
-    if (room.gameState.timer <= 0) { handleTimeOut(roomId); return; }
-    room.gameState.timer -= 1;
-    io.to(roomId).emit('timer_update', { timer: room.gameState.timer });
-  }, 1000);
-}
-
-function handleTimeOut(roomId) {
-  const room = rooms[roomId];
-  if (!room) return;
-  changeTurnToNextTeam(room);
-  broadcastRoomState(roomId);
-}
-
-function changeTurnToNextTeam(room) {
-  room.gameState.phase = "CLUE_WAITING";
-  room.gameState.turn = room.gameState.turn === "RED" ? "BLUE" : "RED";
-  room.gameState.timer = room.settings.clueTimeLimit;
-  room.gameState.currentClue = { word: "", count: 0, guessedCount: 0 };
-}
-
-function checkWinner(room) {
-  const redRemaining = room.words.filter(w => w.type === "RED" && !w.isRevealed).length;
-  const blueRemaining = room.words.filter(w => w.type === "BLUE" && !w.isRevealed).length;
-  if (redRemaining === 0) return "RED";
-  if (blueRemaining === 0) return "BLUE";
-  return null;
+  return shuffled.slice(0, count);
 }
 
 io.on('connection', (socket) => {
+  
   socket.on('join_room', ({ roomId, nickname }) => {
     let targetRoomId = roomId ? roomId.toUpperCase() : null;
-    let isHost = false;
-
+    
     if (!targetRoomId || !rooms[targetRoomId]) {
       targetRoomId = generateRoomId();
-      isHost = true;
+      while (rooms[targetRoomId]) { targetRoomId = generateRoomId(); }
+      
       rooms[targetRoomId] = {
         roomId: targetRoomId,
-        settings: { maxPlayers: 8, clueTimeLimit: 60, guessTimeLimit: 90 },
-        gameState: { phase: "LOBBY", turn: "RED", currentClue: { word: "", count: 0, guessedCount: 0 }, timer: 0, winner: null },
-        slots: { 
-          RED_SPYMASTER: null, BLUE_SPYMASTER: null, 
-          RED_LEADER: null, BLUE_LEADER: null, // 선택자 전용 슬롯 추가
-          RED_OPERATIVES: [null, null, null], BLUE_OPERATIVES: [null, null, null] 
+        players: {},
+        slots: {
+          RED_SPYMASTER: null, RED_LEADER: null, RED_OPERATIVES: [],
+          BLUE_SPYMASTER: null, BLUE_LEADER: null, BLUE_OPERATIVES: []
         },
-        players: {}, words: []
+        maxPlayers: 8,
+        words: [],
+        gameState: { turn: 'RED', phase: 'LOBBY', currentClue: null, winner: null },
+        timerSettings: { clueTimeLimit: 60, guessTimeLimit: 90 },
+        timer: 0,
+        timerInterval: null
       };
     }
 
     const room = rooms[targetRoomId];
+    const isHost = Object.keys(room.players).length === 0;
+    
+    room.players[socket.id] = { id: socket.id, nickname, isHost };
     socket.join(targetRoomId);
-    room.players[socket.id] = { id: socket.id, nickname: nickname || `유저_${socket.id.substring(0, 4)}`, isHost: isHost };
+    
     socket.emit('room_joined', { roomId: targetRoomId, myId: socket.id });
-    broadcastRoomState(targetRoomId);
-  });
-
-  socket.on('change_max_players', ({ roomId, maxPlayers }) => {
-    const room = rooms[roomId];
-    if (!room || !room.players[socket.id]?.isHost) return;
-    room.settings.maxPlayers = maxPlayers;
-    const opSize = Math.max(1, (maxPlayers / 2) - 2); // 팀장1, 선택자1 제외한 일반 요원 수
-    const resize = (arr, size) => {
-      const next = Array(size).fill(null);
-      for(let i=0; i<size; i++) if(arr[i]) next[i] = arr[i];
-      return next;
-    };
-    room.slots.RED_OPERATIVES = resize(room.slots.RED_OPERATIVES, opSize);
-    room.slots.BLUE_OPERATIVES = resize(room.slots.BLUE_OPERATIVES, opSize);
-    broadcastRoomState(roomId);
-  });
-
-  socket.on('change_timer_settings', ({ roomId, clueTimeLimit, guessTimeLimit }) => {
-    const room = rooms[roomId];
-    if (!room || !room.players[socket.id]?.isHost) return;
-    room.settings.clueTimeLimit = clueTimeLimit;
-    room.settings.guessTimeLimit = guessTimeLimit;
-    broadcastRoomState(roomId);
+    io.to(targetRoomId).emit('update_room', room);
   });
 
   socket.on('select_slot', ({ roomId, slotType, index }) => {
     const room = rooms[roomId];
-    if (!room) return;
+    if (!room || room.gameState.phase !== 'LOBBY') return;
 
-    const pId = socket.id;
-    // 모든 슬롯 롤백 청소
-    if (room.slots.RED_SPYMASTER === pId) room.slots.RED_SPYMASTER = null;
-    if (room.slots.BLUE_SPYMASTER === pId) room.slots.BLUE_SPYMASTER = null;
-    if (room.slots.RED_LEADER === pId) room.slots.RED_LEADER = null;
-    if (room.slots.BLUE_LEADER === pId) room.slots.BLUE_LEADER = null;
-    room.slots.RED_OPERATIVES = room.slots.RED_OPERATIVES.map(id => id === pId ? null : id);
-    room.slots.BLUE_OPERATIVES = room.slots.BLUE_OPERATIVES.map(id => id === pId ? null : id);
+    // 기존 슬롯 청소
+    if (room.slots.RED_SPYMASTER === socket.id) room.slots.RED_SPYMASTER = null;
+    if (room.slots.BLUE_SPYMASTER === socket.id) room.slots.BLUE_SPYMASTER = null;
+    if (room.slots.RED_LEADER === socket.id) room.slots.RED_LEADER = null;
+    if (room.slots.BLUE_LEADER === socket.id) room.slots.BLUE_LEADER = null;
+    room.slots.RED_OPERATIVES = room.slots.RED_OPERATIVES.filter(id => id !== socket.id);
+    room.slots.BLUE_OPERATIVES = room.slots.BLUE_OPERATIVES.filter(id => id !== socket.id);
 
-    if (index === null) {
-      if (room.slots[slotType] === null) room.slots[slotType] = pId;
-    } else {
-      if (room.slots[slotType][index] === null) room.slots[slotType][index] = pId;
+    // 새 슬롯 배치
+    if (slotType === 'RED_SPYMASTER' && !room.slots.RED_SPYMASTER) room.slots.RED_SPYMASTER = socket.id;
+    else if (slotType === 'BLUE_SPYMASTER' && !room.slots.BLUE_SPYMASTER) room.slots.BLUE_SPYMASTER = socket.id;
+    else if (slotType === 'RED_LEADER' && !room.slots.RED_LEADER) room.slots.RED_LEADER = socket.id;
+    else if (slotType === 'BLUE_LEADER' && !room.slots.BLUE_LEADER) room.slots.BLUE_LEADER = socket.id;
+    else if (slotType === 'RED_OPERATIVES') {
+      if (room.slots.RED_OPERATIVES[index] === null || room.slots.RED_OPERATIVES[index] === undefined) {
+        room.slots.RED_OPERATIVES[index] = socket.id;
+      }
+    } else if (slotType === 'BLUE_OPERATIVES') {
+      if (room.slots.BLUE_OPERATIVES[index] === null || room.slots.BLUE_OPERATIVES[index] === undefined) {
+        room.slots.BLUE_OPERATIVES[index] = socket.id;
+      }
     }
-    broadcastRoomState(roomId);
+
+    io.to(roomId).emit('update_room', room);
   });
 
   socket.on('toggle_lock_slot', ({ roomId, slotType, index }) => {
     const room = rooms[roomId];
-    if (!room || !room.players[socket.id]?.isHost) return;
-    if (slotType === 'RED_OPERATIVES' || slotType === 'BLUE_OPERATIVES') {
-      const current = room.slots[slotType][index];
-      room.slots[slotType][index] = current === null ? "LOCKED" : current === "LOCKED" ? null : current;
+    if (!room || !room.players[socket.id]?.isHost || room.gameState.phase !== 'LOBBY') return;
+
+    const arr = slotType === 'RED_OPERATIVES' ? room.slots.RED_OPERATIVES : room.slots.BLUE_OPERATIVES;
+    if (arr[index] === 'LOCKED') {
+      arr[index] = null;
+    } else if (!arr[index]) {
+      arr[index] = 'LOCKED';
     }
-    broadcastRoomState(roomId);
+    io.to(roomId).emit('update_room', room);
+  });
+
+  socket.on('change_max_players', ({ roomId, maxPlayers }) => {
+    const room = rooms[roomId];
+    if (!room || !room.players[socket.id]?.isHost || room.gameState.phase !== 'LOBBY') return;
+    
+    room.maxPlayers = maxPlayers;
+    const opCount = Math.floor((maxPlayers - 4) / 2);
+    
+    while(room.slots.RED_OPERATIVES.length < opCount) room.slots.RED_OPERATIVES.push(null);
+    while(room.slots.RED_OPERATIVES.length > opCount) room.slots.RED_OPERATIVES.pop();
+    while(room.slots.BLUE_OPERATIVES.length < opCount) room.slots.BLUE_OPERATIVES.push(null);
+    while(room.slots.BLUE_OPERATIVES.length > opCount) room.slots.BLUE_OPERATIVES.pop();
+
+    io.to(roomId).emit('update_room', room);
+  });
+
+  socket.on('change_timer_settings', ({ roomId, clueTimeLimit, guessTimeLimit }) => {
+    const room = rooms[roomId];
+    if (!room || !room.players[socket.id]?.isHost || room.gameState.phase !== 'LOBBY') return;
+    room.timerSettings = { clueTimeLimit, guessTimeLimit };
+    io.to(roomId).emit('update_room', room);
   });
 
   socket.on('game_start', ({ roomId }) => {
     const room = rooms[roomId];
-    if (!room || !room.players[socket.id]?.isHost) return;
-    if (!room.slots.RED_SPYMASTER || !room.slots.BLUE_SPYMASTER || !room.slots.RED_LEADER || !room.slots.BLUE_LEADER) {
-      return socket.emit('game_error', { message: "양 팀의 팀장과 선택자(대표)가 모두 배정되어야 작전 개시가 가능합니다." });
-    }
-    room.words = generateGameBoard(CODENAMES_WORDS_1000);
-    room.gameState.phase = "CLUE_WAITING";
-    room.gameState.turn = "RED";
-    room.gameState.currentClue = { word: "", count: 0, guessedCount: 0 };
-    room.gameState.timer = room.settings.clueTimeLimit;
-    broadcastRoomState(roomId);
-    startRoomTimer(roomId);
+    if (!room || !room.players[socket.id]?.isHost || room.gameState.phase !== 'LOBBY') return;
+
+    const selectedWords = getRandomWords(25);
+    const types = [
+      ...Array(9).fill('RED'),
+      ...Array(8).fill('BLUE'),
+      ...Array(7).fill('NEUTRAL'),
+      'ASSASSIN'
+    ].sort(() => Math.random() - 0.5);
+
+    room.words = selectedWords.map((word, i) => ({
+      id: i,
+      text: word,
+      type: types[i],
+      isRevealed: false
+    }));
+
+    room.gameState = { turn: 'RED', phase: 'CLUE_WAITING', currentClue: null, winner: null };
+    startTimer(roomId, room.timerSettings.clueTimeLimit);
+    io.to(roomId).emit('update_room', room);
   });
 
   socket.on('submit_clue', ({ roomId, word, count }) => {
     const room = rooms[roomId];
-    if (!room || room.gameState.phase !== "CLUE_WAITING") return;
-    const currentSpy = room.gameState.turn === "RED" ? room.slots.RED_SPYMASTER : room.slots.BLUE_SPYMASTER;
-    if (currentSpy !== socket.id) return;
+    if (!room || room.gameState.phase !== 'CLUE_WAITING') return;
 
+    room.gameState.phase = 'GUESSING';
     room.gameState.currentClue = { word, count: parseInt(count, 10), guessedCount: 0 };
-    room.gameState.phase = "GUESSING";
-    room.gameState.timer = room.settings.guessTimeLimit;
-    broadcastRoomState(roomId);
+    
+    clearInterval(room.timerInterval);
+    startTimer(roomId, room.timerSettings.guessTimeLimit);
+    io.to(roomId).emit('update_room', room);
   });
 
   socket.on('click_card', ({ roomId, cardId }) => {
     const room = rooms[roomId];
-    if (!room || room.gameState.phase !== "GUESSING") return;
-
-    // [핵심 변경] 오직 현재 턴인 팀의 '선택자(LEADER)'만 클릭 검증 및 패스 허용
-    const currentTurn = room.gameState.turn;
-    const currentLeader = currentTurn === "RED" ? room.slots.RED_LEADER : room.slots.BLUE_LEADER;
-    
-    if (currentLeader !== socket.id) return; // 선택자가 아니면 묵살
+    if (!room || room.gameState.phase !== 'GUESSING') return;
 
     const card = room.words.find(w => w.id === cardId);
     if (!card || card.isRevealed) return;
 
     card.isRevealed = true;
-    room.gameState.currentClue.guessedCount += 1;
+    const currentTurn = room.gameState.turn;
 
-    if (card.type === "ASSASSIN") {
-      room.gameState.phase = "ENDED"; room.gameState.winner = currentTurn === "RED" ? "BLUE" : "RED";
-      broadcastRoomState(roomId); return;
-    }
-    const winner = checkWinner(room);
-    if (winner) {
-      room.gameState.phase = "ENDED"; room.gameState.winner = winner;
-      broadcastRoomState(roomId); return;
+    if (card.type === 'ASSASSIN') {
+      endGame(roomId, currentTurn === 'RED' ? 'BLUE' : 'RED');
+      return;
     }
 
     if (card.type === currentTurn) {
-      if (room.gameState.currentClue.guessedCount >= (room.gameState.currentClue.count + 1)) {
-        changeTurnToNextTeam(room);
+      room.gameState.currentClue.guessedCount += 1;
+      const leftWords = room.words.filter(w => w.type === currentTurn && !w.isRevealed).length;
+      
+      if (leftWords === 0) {
+        endGame(roomId, currentTurn);
+        return;
+      }
+
+      if (room.gameState.currentClue.guessedCount >= room.gameState.currentClue.count + 1) {
+        switchTurn(roomId);
       }
     } else {
-      changeTurnToNextTeam(room);
+      const opponentTurn = currentTurn === 'RED' ? 'BLUE' : 'RED';
+      const leftWords = room.words.filter(w => w.type === opponentTurn && !w.isRevealed).length;
+      
+      if (leftWords === 0) {
+        endGame(roomId, opponentTurn);
+        return;
+      }
+      switchTurn(roomId);
     }
-    broadcastRoomState(roomId);
+    io.to(roomId).emit('update_room', room);
   });
 
   socket.on('skip_guess', ({ roomId }) => {
     const room = rooms[roomId];
-    if (!room || room.gameState.phase !== "GUESSING") return;
-    const currentLeader = room.gameState.turn === "RED" ? room.slots.RED_LEADER : room.slots.BLUE_LEADER;
-    if (currentLeader !== socket.id) return; // 선택자만 턴 패스 가능
+    if (!room || room.gameState.phase !== 'GUESSING') return;
+    switchTurn(roomId);
+    io.to(roomId).emit('update_room', room);
+  });
 
-    changeTurnToNextTeam(room);
-    broadcastRoomState(roomId);
+  // 💡 [피드백 2 반영] 한판하고 방 깨지 않고 멤버 역할 초기화 후 로비 복귀 백엔드 파이프라인
+  socket.on('return_to_lobby', ({ roomId }) => {
+    const room = rooms[roomId];
+    if (!room) return;
+
+    // 타이머 인터벌 클리어 및 상태 백투랍 상태로 롤백
+    if (room.timerInterval) clearInterval(room.timerInterval);
+    room.gameState = { turn: 'RED', phase: 'LOBBY', currentClue: null, winner: null };
+    room.words = [];
+    room.timer = 0;
+
+    // 💡 다음 판 멤버 순환 연출을 위해 locked 슬롯을 빼고 전원 관전자로 초기화(null 바인딩)
+    room.slots.RED_SPYMASTER = null;
+    room.slots.BLUE_SPYMASTER = null;
+    room.slots.RED_LEADER = null;
+    room.slots.BLUE_LEADER = null;
+    room.slots.RED_OPERATIVES = room.slots.RED_OPERATIVES.map(v => v === 'LOCKED' ? 'LOCKED' : null);
+    room.slots.BLUE_OPERATIVES = room.slots.BLUE_OPERATIVES.map(v => v === 'LOCKED' ? 'LOCKED' : null);
+
+    io.to(roomId).emit('update_room', room);
   });
 
   socket.on('disconnect', () => {
-    Object.keys(rooms).forEach(roomId => {
+    for (const roomId in rooms) {
       const room = rooms[roomId];
-      if (room && room.players[socket.id]) {
+      if (room.players[socket.id]) {
         const wasHost = room.players[socket.id].isHost;
+        delete room.players[socket.id];
+
         if (room.slots.RED_SPYMASTER === socket.id) room.slots.RED_SPYMASTER = null;
         if (room.slots.BLUE_SPYMASTER === socket.id) room.slots.BLUE_SPYMASTER = null;
         if (room.slots.RED_LEADER === socket.id) room.slots.RED_LEADER = null;
         if (room.slots.BLUE_LEADER === socket.id) room.slots.BLUE_LEADER = null;
-        room.slots.RED_OPERATIVES = room.slots.RED_OPERATIVES.map(id => id === socket.id ? null : id);
-        room.slots.BLUE_OPERATIVES = room.slots.BLUE_OPERATIVES.map(id => id === socket.id ? null : id);
-        delete room.players[socket.id];
-        const rem = Object.keys(room.players);
-        if (rem.length === 0) { delete rooms[roomId]; if (roomIntervals[roomId]) clearInterval(roomIntervals[roomId]); } 
-        else if (wasHost) { room.players[rem[0]].isHost = true; broadcastRoomState(roomId); } 
-        else { broadcastRoomState(roomId); }
+        room.slots.RED_OPERATIVES = room.slots.RED_OPERATIVES.map(v => v === socket.id ? null : v);
+        room.slots.BLUE_OPERATIVES = room.slots.BLUE_OPERATIVES.map(v => v === socket.id ? null : v);
+
+        if (Object.keys(room.players).length === 0) {
+          if (room.timerInterval) clearInterval(room.timerInterval);
+          delete rooms[roomId];
+        } else if (wasHost) {
+          const nextHostId = Object.keys(room.players)[0];
+          room.players[nextHostId].isHost = true;
+          io.to(roomId).emit('update_room', room);
+        } else {
+          io.to(roomId).emit('update_room', room);
+        }
+        break;
       }
-    });
+    }
   });
 });
 
-const PORT = 4000;
-server.listen(PORT, () => console.log(`코어 서버 포트 활성화: ${PORT}`));
+function startTimer(roomId, duration) {
+  const room = rooms[roomId];
+  if (!room) return;
+  
+  room.timer = duration;
+  io.to(roomId).emit('timer_update', { timer: room.timer });
+
+  room.timerInterval = setInterval(() => {
+    room.timer -= 1;
+    io.to(roomId).emit('timer_update', { timer: room.timer });
+
+    if (room.timer <= 0) {
+      clearInterval(room.timerInterval);
+      if (room.gameState.phase === 'CLUE_WAITING') {
+        switchTurn(roomId);
+      } else if (room.gameState.phase === 'GUESSING') {
+        switchTurn(roomId);
+      }
+      io.to(roomId).emit('update_room', room);
+    }
+  }, 1000);
+}
+
+function switchTurn(roomId) {
+  const room = rooms[roomId];
+  if (!room) return;
+  clearInterval(room.timerInterval);
+  
+  room.gameState.turn = room.gameState.turn === 'RED' ? 'BLUE' : 'RED';
+  room.gameState.phase = 'CLUE_WAITING';
+  room.gameState.currentClue = null;
+  
+  startTimer(roomId, room.timerSettings.clueTimeLimit);
+}
+
+function endGame(roomId, winner) {
+  const room = rooms[roomId];
+  if (!room) return;
+  clearInterval(room.timerInterval);
+  room.gameState.phase = 'ENDED';
+  room.gameState.winner = winner;
+}
+
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, '0.0.0.0', () => console.log(`코어 서버 오픈포트: ${PORT}`));

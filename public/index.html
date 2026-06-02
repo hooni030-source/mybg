@@ -19,15 +19,60 @@
                    0px 4px 8px rgba(0,0,0,0.9);
     }
 
-    /* 💡 [신기능] 카드 뒤집을 때 화면 전체를 3초간 강타하고 서서히 페이드 아웃되는 하드코어 애니메이션 셰이더 */
+    /* ==========================================================================
+       🔥 PREMIUM 3D FLIP COMPONENT SHADER (3D 카드 회전 물리 연산엔진)
+       ========================================================================== */
+    .perspective-container {
+      perspective: 1000px; /* 입체적인 3D 깊이감 공간 정의 */
+    }
+    
+    .flip-card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); /* 회전 가속도 곡선 최적화 */
+      transform-style: preserve-3d; /* 자식 요소들의 3D 평면 유지 */
+    }
+    
+    /* 뒤집힘 상태 클래스 트리거 */
+    .is-flipped .flip-card-inner {
+      transform: rotateY(180deg);
+    }
+    
+    .flip-card-front, .flip-card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      -webkit-backface-visibility: hidden; /* 뒷면일 때 렌더링을 완전히 숨겨 관통 방지 */
+      backface-visibility: hidden;
+      border-radius: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    /* 카드 앞면 (단어가 보이는 베이스 상태) */
+    .flip-card-front {
+      z-index: 2;
+      transform: rotateY(0deg);
+    }
+    
+    /* 카드 뒷면 (팀별 이미지/칼라가 안착될 공간) */
+    .flip-card-back {
+      transform: rotateY(180deg); /* 미리 180도 돌려놓아 뒤집혔을 때 정면을 보게 함 */
+    }
+
+    /* 3초 전면 팝업 짤 대형 스플래시 애니메이션 */
     .animate-zoom-fade {
       animation: zoomFadeInOut 4s forwards cubic-bezier(0.25, 1, 0.5, 1);
     }
     @keyframes zoomFadeInOut {
       0% { opacity: 0; transform: scale(0.3); backdrop-filter: blur(0px); }
       10% { opacity: 1; transform: scale(1); backdrop-filter: blur(8px); }
-      75% { opacity: 1; transform: scale(1); backdrop-filter: blur(8px); } /* 3초(전체 75%) 동안 화면 가득 유지 */
-      100% { opacity: 0; transform: scale(0.4); backdrop-filter: blur(0px); } /* 마지막 1초간 서서히 축소되며 페이드아웃 */
+      75% { opacity: 1; transform: scale(1); backdrop-filter: blur(8px); }
+      100% { opacity: 0; transform: scale(0.4); backdrop-filter: blur(0px); }
     }
   </style>
 </head>
@@ -41,7 +86,9 @@
       <div class="border-4 border-slate-700 rounded-2xl overflow-hidden shadow-2xl shadow-black/80 aspect-[4/3] bg-slate-950 max-w-xl mx-auto">
         <img id="overlay-img" src="" class="w-full h-full object-cover">
       </div>
-      <p id="overlay-desc" class="text-slate-400 text-sm sm:text-base font-sans tracking-wide">작전이 전역 종료되었습니다. 방장이 새로고침 후 다시 진입하세요.</p>
+      <button onclick="requestLobbyReturn()" class="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-hud font-black text-lg px-10 py-4 rounded-2xl transform active:scale-95 shadow-xl hover:shadow-indigo-500/20 transition-all tracking-widest">
+        🔄 RETURN TO LOBBY (다음판 대기실 이동)
+      </button>
     </div>
   </div>
 
@@ -55,7 +102,7 @@
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-400 mb-2 tracking-wider">작전 룸 코드 (비워두면 새로 개설)</label>
-          <input type="text" id="input-roomid" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white uppercase outline-none" placeholder="예: FW12">
+          <input type="text" id="input-roomid" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white uppercase outline-none" placeholder="예: ABCD">
         </div>
         <button onclick="joinRoom()" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-3 rounded-xl transition transform active:scale-95 shadow-lg">작전지 진입</button>
       </div>
@@ -161,10 +208,11 @@
           <button id="btn-skip-guess" onclick="skipGuess()" class="hidden w-full sm:w-auto bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold px-5 py-2 rounded-xl text-sm transition font-hud tracking-wider">PASS TURN</button>
         </div>
 
-        <div id="grid-container" class="word-grid"></div>
+        <div id="grid-container" class="word-grid perspective-container"></div>
 
-        <div id="post-game-timer-bar" class="hidden bg-slate-900 border border-red-500/20 p-3 rounded-xl text-center shadow-lg animate-pulse">
-          <p class="text-sm font-hud text-red-400 tracking-wider">⚠️ 작전이 종료되었습니다! <span id="post-game-seconds" class="font-black text-xl text-yellow-400 mx-1">15</span>초 후에 엔딩 현황 오버레이 스크린으로 자동 전환됩니다. (사진을 감상하세요)</p>
+        <div id="post-game-timer-bar" class="hidden bg-slate-900 border border-red-500/20 p-4 rounded-2xl text-center shadow-lg animate-pulse flex flex-col sm:flex-row justify-between items-center gap-3">
+          <p class="text-sm font-hud text-red-400 tracking-wider">⚠️ 작전 종료! <span id="post-game-seconds" class="font-black text-xl text-yellow-400 mx-1">15</span>초 후에 엔딩 전광판 팝업으로 이동합니다. (정답 카드맵 오픈 상태)</p>
+          <button onclick="requestLobbyReturn()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs px-4 py-2 rounded-xl border border-slate-700 font-hud">⏩ 바로 로비로 복귀</button>
         </div>
       </div>
     </div>
@@ -177,10 +225,12 @@
     let hasEndTriggered = false; 
 
     const revealedCardTextToggleMap = {};
-    // 💡 [메모리 버퍼] 방금 뒤집힌 신상 카드는 중복 팝업 연출이 안 터지게 막아줄 기록장
     const animatedCardHistoryMap = {};
 
-    const neutralImages = ['mh2.jpg', 'mh4.jpg', 'mh9.jpg', 'mh11.jpg'];
+    const neutralImages = [
+      'mh2.jpg', 'mh4.jpg', 'mh9.jpg', 'mh11.jpg', 
+      'neutral.jpg', 'neutral1.jpg', 'neutral2.jpg', 'neutral3.jpg', 'neutral4.jpg'
+    ];
 
     document.getElementById('view-login').classList.remove('hidden');
     document.getElementById('view-game').classList.add('hidden');
@@ -191,6 +241,12 @@
       if(!nickname) return alert("요원 네임(별명)을 기입해 주세요!");
       if(!roomId) roomId = null;
       socket.emit('join_room', { roomId, nickname });
+    }
+
+    function requestLobbyReturn() {
+      if(roomState && roomState.roomId) {
+        socket.emit('return_to_lobby', { roomId: roomState.roomId });
+      }
     }
 
     socket.on('room_joined', (data) => {
@@ -242,7 +298,6 @@
         document.getElementById('game-over-overlay').classList.add('hidden');
         document.getElementById('post-game-timer-bar').classList.add('hidden');
         hasEndTriggered = false; 
-        // 룸 복귀 시 애니메이션 메모리 올 클리어
         Object.keys(animatedCardHistoryMap).forEach(k => delete animatedCardHistoryMap[k]);
         renderLobbySlots(room);
       } else {
@@ -326,6 +381,9 @@
         briefingText.innerHTML = `📢 암호: <span class="text-amber-300 font-black px-2 py-0.5 bg-amber-400/10 rounded font-hud">${room.gameState.currentClue.word}</span> ➡️ <span class="text-amber-400 font-hud">${room.gameState.currentClue.count}개</span> <span class="text-xs text-slate-400 font-sans"> (성공: ${room.gameState.currentClue.guessedCount}개)</span>`;
         if(amILeaderOfCurrentTurn) passBtn.classList.remove('hidden');
         else passBtn.classList.add('hidden');
+      } else if (room.gameState.phase === 'ENDED') {
+        briefingText.innerHTML = `🏁 <span class="text-emerald-400 font-bold font-hud">${room.gameState.winner} FACTION 작전 완수!</span> - 복기용 정답 맵 활성화 완료.`;
+        passBtn.classList.add('hidden');
       } else {
         briefingText.innerText = `⏳ ${room.gameState.turn} 팀장이 암호 신호 조율 중...`;
         passBtn.classList.add('hidden');
@@ -335,34 +393,78 @@
       gridContainer.innerHTML = '';
 
       room.words.forEach(card => {
-        const cardBtn = document.createElement('button');
-        cardBtn.className = `aspect-[4/3] rounded-2xl text-xl md:text-2xl tracking-widest text-center flex flex-col justify-center items-center border transition-all duration-300 transform shadow-md relative overflow-hidden`;
+        // Wrapper 역할을 수행할 3D 카드 컨테이너 디브 생성
+        const cardWrapper = document.createElement('div');
+        cardWrapper.className = `aspect-[4/3] w-full h-full relative cursor-pointer`;
+        
+        const isGameEnded = room.gameState.phase === 'ENDED';
+        const activeType = (card.isRevealed || amISpymaster || isGameEnded) ? card.type : 'UNKNOWN';
+        const isForceRevealedByEnd = isGameEnded && !card.isRevealed;
 
-        const activeType = (card.isRevealed || amISpymaster) ? card.type : 'UNKNOWN';
+        // 회전 제어를 총괄할 내부 본체 코어 디브 생성
+        const innerNode = document.createElement('div');
+        innerNode.className = `flip-card-inner`;
+        
+        // 뒤집힌 상태 검증 후 3D 플립 오버레이 트리거 부여
+        if(card.isRevealed) {
+          cardWrapper.className += " is-flipped scale-[0.96]";
+        }
 
-        if (activeType === 'RED') cardBtn.className += card.isRevealed ? ' bg-red-600 border-red-500' : ' bg-red-950/70 text-red-300 border-red-900/60 hover:bg-red-900';
-        else if (activeType === 'BLUE') cardBtn.className += card.isRevealed ? ' bg-blue-600 border-blue-500' : ' bg-blue-950/70 text-blue-300 border-blue-900/60 hover:bg-blue-900';
-        else if (activeType === 'NEUTRAL') cardBtn.className += card.isRevealed ? ' bg-orange-100 text-slate-900 font-bold' : ' bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700';
-        else if (activeType === 'ASSASSIN') cardBtn.className += card.isRevealed ? ' bg-black border-red-600 ring-4 ring-red-600/50' : ' bg-slate-900 text-slate-600 border-red-950 hover:text-red-400';
-        else cardBtn.className += ' bg-slate-900 text-slate-100 border-slate-800 hover:border-indigo-500/40 hover:-translate-y-1 hover:shadow-lg';
+        // ----------------------------------------------------
+        // 🔹 FRONT CARD COMPONENT (텍스트 단어 배치 영역)
+        // ----------------------------------------------------
+        const frontNode = document.createElement('div');
+        frontNode.className = `flip-card-front text-xl md:text-2xl tracking-widest text-center font-bold border transition-all duration-300 bg-slate-900 text-slate-100 border-slate-800 shadow-md p-2`;
+        frontNode.innerText = card.text;
 
-        if (card.isRevealed) {
-          // 사진 주소 추출 엔진
+        // 마스터 및 게임 피날레 상태에 따른 앞면 컬러 전처리 스킨 칠하기
+        if(!card.isRevealed && (amISpymaster || isGameEnded)) {
+          if (activeType === 'RED') frontNode.className += ' bg-red-950/70 text-red-300 border-red-900/60';
+          else if (activeType === 'BLUE') frontNode.className += ' bg-blue-950/70 text-blue-300 border-blue-900/60';
+          else if (activeType === 'NEUTRAL') frontNode.className += ' bg-slate-800 text-slate-400 border-slate-700';
+          else if (activeType === 'ASSASSIN') frontNode.className += ' bg-black/80 text-red-600 border-red-950 font-black';
+        }
+
+        // 클릭 권한 부여 (추리 단계이자 내 턴일 경우)
+        if (room.gameState.phase === 'GUESSING' && amILeaderOfCurrentTurn && !card.isRevealed) {
+          cardWrapper.onclick = () => socket.emit('click_card', { roomId: room.roomId, cardId: card.id });
+        } else if (card.isRevealed) {
+          // 뒤집힌 카드는 클릭 시 이미지 보정/텍스트 반전 레이어 토글 동작
+          cardWrapper.onclick = () => {
+            revealedCardTextToggleMap[card.id] = !revealedCardTextToggleMap[card.id];
+            renderInGameBoard(roomState); 
+          };
+        } else {
+          cardWrapper.className += ' cursor-not-allowed opacity-70';
+        }
+
+        // ----------------------------------------------------
+        // 🔸 BACK CARD COMPONENT (뒤집혔을 때 나타날 이미지 영역)
+        // ----------------------------------------------------
+        const backNode = document.createElement('div');
+        backNode.className = `flip-card-back w-full h-full border text-center font-bold relative overflow-hidden shadow-inner`;
+
+        // 카드 타입별 최종 백그라운드 스킨 확정 연산
+        if (card.type === 'RED') backNode.className += ' bg-red-600 border-red-500';
+        else if (card.type === 'BLUE') backNode.className += ' bg-blue-600 border-blue-500';
+        else if (card.type === 'NEUTRAL') backNode.className += ' bg-orange-100 text-slate-900 font-bold border-orange-200';
+        else if (card.type === 'ASSASSIN') backNode.className += ' bg-black border-red-600 ring-2 ring-red-600/30';
+
+        // 이미 뒤집혔거나, 복기 모드 시점에 백 엔드단 짤 오버레이 처리
+        if (card.isRevealed || isForceRevealedByEnd) {
           let imgSrc = '';
-          const randIdx = card.id % 5;
-          const neutralRandIdx = card.id % 4;
+          const randIdx = card.id % 8;
+          const neutralRandIdx = card.id % 9;
 
           if (card.type === 'RED') imgSrc = `/img/redteam/red_${randIdx}.jpg`; 
           else if (card.type === 'BLUE') imgSrc = `/img/blueteam/blue_${randIdx}.jpg`; 
           else if (card.type === 'NEUTRAL') imgSrc = `/img/neutral/${neutralImages[neutralRandIdx]}`; 
           else if (card.type === 'ASSASSIN') imgSrc = `/img/assasin/mh6.jpg`; 
 
-          // 💡 [피드백 적용: 3초 전면 전체화면 킬러 이펙트 쇼 구현]
-          // 새로 매핑된(아직 연출 기록장에 등록되지 않은) 신상 오픈 카드라면 이펙트 발동!
-          if (!animatedCardHistoryMap[card.id] && room.gameState.phase !== 'LOBBY') {
-            animatedCardHistoryMap[card.id] = true; // 중복 발동 차단 락 장착
+          // 3초 폭발적인 화면 스플래시 연출 가동
+          if (!animatedCardHistoryMap[card.id] && room.gameState.phase !== 'LOBBY' && card.isRevealed) {
+            animatedCardHistoryMap[card.id] = true; 
 
-            // 도큐먼트 바디에 다이렉트로 전면 특수 오버레이 디브를 생성
             const splashDiv = document.createElement('div');
             splashDiv.className = 'fixed inset-0 z-50 bg-black/70 flex justify-center items-center animate-zoom-fade p-4 pointer-events-none';
             
@@ -373,51 +475,43 @@
             splashDiv.appendChild(splashImg);
             document.body.appendChild(splashDiv);
 
-            // 4초 뒤 애니메이션 페이드아웃 페이즈가 끝나면 엘리먼트 자동 폭파 청소
             setTimeout(() => { splashDiv.remove(); }, 4000);
           }
 
-          // 기본 격자 바둑판 안착 로직 (오픈 카드 연출)
+          // 안착용 이미지 생성 및 블러 필터 예외 처리 바인딩
           const img = document.createElement('img');
           img.src = imgSrc;
 
           const isTextForcedOn = !!revealedCardTextToggleMap[card.id];
 
           if (isTextForcedOn) {
-            img.className = 'absolute inset-0 w-full h-full object-cover rounded-2xl brightness-[0.15] blur-[2px]';
-            cardBtn.appendChild(img);
+            img.className = 'absolute inset-0 w-full h-full object-cover brightness-[0.15] blur-[2px] rounded-2xl';
+            backNode.appendChild(img);
 
             const wordSpan = document.createElement('span');
             wordSpan.innerText = card.text;
             wordSpan.className = 'relative z-10 font-black text-yellow-400 text-xl md:text-2xl text-stroke';
-            cardBtn.appendChild(wordSpan);
+            backNode.appendChild(wordSpan);
           } else {
-            img.className = 'absolute inset-0 w-full h-full object-cover rounded-2xl brightness-[0.75]';
-            cardBtn.appendChild(img);
+            img.className = 'absolute inset-0 w-full h-full object-cover brightness-[0.75] rounded-2xl';
+            backNode.appendChild(img);
           }
-
-          cardBtn.onclick = () => {
-            revealedCardTextToggleMap[card.id] = !revealedCardTextToggleMap[card.id];
-            renderInGameBoard(roomState); 
-          };
-          cardBtn.className += ' cursor-pointer';
-
         } else {
-          cardBtn.innerText = card.text;
-          
-          if (room.gameState.phase === 'GUESSING' && amILeaderOfCurrentTurn) {
-            cardBtn.onclick = () => socket.emit('click_card', { roomId: room.roomId, cardId: card.id });
-            cardBtn.className += ' cursor-pointer';
-          } else {
-            cardBtn.className += ' cursor-not-allowed opacity-70';
+          // 게임 강제 종료로 정답 노출 시 폰트 스케일 보정
+          backNode.innerText = card.text;
+          if (isForceRevealedByEnd) {
+            backNode.className += ' font-black text-stroke text-white flex items-center justify-center text-xl';
           }
         }
 
-        if (card.isRevealed) cardBtn.className += ' scale-95';
-        gridContainer.appendChild(cardBtn);
+        // 컴포넌트 역조립 트리 완성
+        innerNode.appendChild(frontNode);
+        innerNode.appendChild(backNode);
+        cardWrapper.appendChild(innerNode);
+        gridContainer.appendChild(cardWrapper);
       });
 
-      // 15초 슬립 딜레이 타이머
+      // 15초 인터벌 딜레이 기동
       if (room.gameState.phase === 'ENDED' && !hasEndTriggered) {
         hasEndTriggered = true; 
         
@@ -429,13 +523,21 @@
         secondsSpan.innerText = leftSeconds;
 
         const postGameInterval = setInterval(() => {
+          if(roomState.gameState.phase === 'LOBBY') {
+            clearInterval(postGameInterval);
+            timerBar.classList.add('hidden');
+            return;
+          }
+
           leftSeconds -= 1;
-          secondsSpan.innerText = leftSeconds;
+          if(secondsSpan) secondsSpan.innerText = leftSeconds;
 
           if (leftSeconds <= 0) {
             clearInterval(postGameInterval);
             timerBar.classList.add('hidden');
-            triggerFullscreenOverlay(room, isMyTeamRed, isMyTeamBlue);
+            if(roomState.gameState.phase === 'ENDED') {
+              triggerFullscreenOverlay(room, isMyTeamRed, isMyTeamBlue);
+            }
           }
         }, 1000);
       }
