@@ -215,6 +215,7 @@
     let myId = null; 
     let roomState = null;
     let hasEndTriggered = false; 
+    let lastSocketError = "";
 
     const revealedCardTextToggleMap = {};
     const animatedCardHistoryMap = {};
@@ -236,6 +237,27 @@
     socket.on('reconnect_failed', () => {
       localStorage.removeItem('codenames_room_id');
       localStorage.removeItem('codenames_user_token');
+      alert("방 재연결에 실패했습니다. 닉네임을 입력하고 다시 입장해 주세요.");
+    });
+
+    socket.on('connect', () => {
+      const savedRoomId = localStorage.getItem('codenames_room_id');
+      const savedToken = localStorage.getItem('codenames_user_token');
+      if (savedRoomId && savedToken && roomState) {
+        socket.emit('request_reconnect', { roomId: savedRoomId, userToken: savedToken });
+      }
+    });
+
+    socket.on('disconnect', (reason) => {
+      lastSocketError = reason || "disconnect";
+      const status = document.getElementById('display-status');
+      if (status && roomState) status.innerText = `서버 연결 끊김: ${lastSocketError}`;
+    });
+
+    socket.on('connect_error', (error) => {
+      lastSocketError = error?.message || "connect_error";
+      const status = document.getElementById('display-status');
+      if (status && roomState) status.innerText = `서버 연결 실패: ${lastSocketError}`;
     });
 
     function joinRoom() {
@@ -393,8 +415,28 @@
     
     function startGame() {
       if (!roomState?.roomId) return alert("방 정보가 아직 준비되지 않았습니다.");
-      if (!socket.connected) return alert("서버 연결이 끊겼습니다. 새로고침 후 다시 입장해 주세요.");
-      socket.emit('game_start', { roomId: roomState.roomId });
+      if (socket.connected) {
+        socket.emit('game_start', { roomId: roomState.roomId });
+        return;
+      }
+
+      const roomId = roomState.roomId;
+      const userToken = localStorage.getItem('codenames_user_token');
+      const timeoutId = setTimeout(() => {
+        socket.off('connect', retryStartAfterReconnect);
+        alert(`서버 재연결에 실패했습니다. 새로고침 후 다시 입장해 주세요. (${lastSocketError || 'timeout'})`);
+      }, 5000);
+
+      function retryStartAfterReconnect() {
+        clearTimeout(timeoutId);
+        if (roomId && userToken) {
+          socket.emit('request_reconnect', { roomId, userToken });
+        }
+        socket.emit('game_start', { roomId });
+      }
+
+      socket.once('connect', retryStartAfterReconnect);
+      socket.connect();
     }
 
     function renderInGameBoard(room) {

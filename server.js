@@ -14,6 +14,7 @@ const io = new Server(server, {
 });
 
 const rooms = {};
+const DISCONNECT_GRACE_MS = 120000;
 
 function generateRoomId() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -335,7 +336,7 @@ io.on('connection', (socket) => {
               io.to(roomId).emit('update_room', room);
             }
           }
-        }, 8000);
+        }, DISCONNECT_GRACE_MS);
         break;
       }
     }
