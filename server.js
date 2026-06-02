@@ -14,7 +14,40 @@ const io = new Server(server, {
 });
 
 const rooms = {};
+const roomTimers = {};
 const DISCONNECT_GRACE_MS = 120000;
+
+function getRoomKey(roomId) {
+  return roomId ? String(roomId).toUpperCase() : null;
+}
+
+function getPublicRoom(room) {
+  if (!room) return null;
+  return {
+    roomId: room.roomId,
+    players: room.players,
+    slots: room.slots,
+    config: room.config,
+    words: room.words,
+    gameState: room.gameState,
+    timerSettings: room.timerSettings,
+    timer: room.timer
+  };
+}
+
+function emitRoomUpdate(roomId) {
+  const targetRoomId = getRoomKey(roomId);
+  const room = rooms[targetRoomId];
+  if (room) io.to(targetRoomId).emit('update_room', getPublicRoom(room));
+}
+
+function clearRoomTimer(roomId) {
+  const targetRoomId = getRoomKey(roomId);
+  if (targetRoomId && roomTimers[targetRoomId]) {
+    clearInterval(roomTimers[targetRoomId]);
+    delete roomTimers[targetRoomId];
+  }
+}
 
 function generateRoomId() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -53,21 +86,21 @@ function enforceSlotStructure(room) {
 io.on('connection', (socket) => {
   
   socket.on('request_reconnect', ({ roomId, userToken }) => {
-    const targetRoomId = roomId ? roomId.toUpperCase() : null;
+    const targetRoomId = getRoomKey(roomId);
     const room = rooms[targetRoomId];
     
     if (room && room.players[userToken]) {
       room.players[userToken].socketId = socket.id;
       socket.join(targetRoomId);
       socket.emit('room_joined', { roomId: targetRoomId, myId: userToken, userToken });
-      io.to(targetRoomId).emit('update_room', room);
+      emitRoomUpdate(targetRoomId);
     } else {
       socket.emit('reconnect_failed');
     }
   });
   
   socket.on('join_room', ({ roomId, nickname, userToken }) => {
-    let targetRoomId = roomId ? roomId.toUpperCase() : null;
+    let targetRoomId = getRoomKey(roomId);
     
     if (!targetRoomId || !rooms[targetRoomId]) {
       targetRoomId = generateRoomId();
@@ -84,8 +117,7 @@ io.on('connection', (socket) => {
         words: [],
         gameState: { turn: 'RED', phase: 'LOBBY', currentClue: null, winner: null },
         timerSettings: { clueTimeLimit: 60, guessTimeLimit: 90 },
-        timer: 0,
-        timerInterval: null
+        timer: 0
       };
       // 초기 개설 시 슬롯 레이아웃 동기화
       enforceSlotStructure(rooms[targetRoomId]);
@@ -104,7 +136,7 @@ io.on('connection', (socket) => {
     
     socket.join(targetRoomId);
     socket.emit('room_joined', { roomId: targetRoomId, myId: token, userToken: token });
-    io.to(targetRoomId).emit('update_room', room);
+    emitRoomUpdate(targetRoomId);
   });
 
   socket.on('select_slot', ({ roomId, slotType, index }) => {
@@ -134,7 +166,7 @@ io.on('connection', (socket) => {
       else if (slotType === 'BLUE_OPERATIVES' && room.slots.BLUE_OPERATIVES[index] === null) room.slots.BLUE_OPERATIVES[index] = playerToken;
     }
 
-    io.to(roomId).emit('update_room', room);
+    emitRoomUpdate(roomId);
   });
 
   socket.on('toggle_lock_slot', ({ roomId, slotType, index }) => {
@@ -149,7 +181,7 @@ io.on('connection', (socket) => {
     const arr = slotType === 'RED_OPERATIVES' ? room.slots.RED_OPERATIVES : room.slots.BLUE_OPERATIVES;
     if (arr[index] === 'LOCKED') { arr[index] = null; } 
     else if (!arr[index]) { arr[index] = 'LOCKED'; }
-    io.to(roomId).emit('update_room', room);
+    emitRoomUpdate(roomId);
   });
 
   socket.on('change_max_players', ({ roomId, maxPlayers }) => {
@@ -163,7 +195,7 @@ io.on('connection', (socket) => {
     // 💡 셀렉트 박스 바꿀 때 즉시 슬롯 개수 늘리고 줄여서 프론트와 완벽 동기화
     enforceSlotStructure(room);
 
-    io.to(roomId).emit('update_room', room);
+    emitRoomUpdate(roomId);
   });
 
   socket.on('change_timer_settings', ({ roomId, clueTimeLimit, guessTimeLimit }) => {
@@ -174,11 +206,11 @@ io.on('connection', (socket) => {
     if (!playerToken || !room.players[playerToken].isHost) return;
 
     room.timerSettings = { clueTimeLimit: parseInt(clueTimeLimit, 10), guessTimeLimit: parseInt(guessTimeLimit, 10) };
-    io.to(roomId).emit('update_room', room);
+    emitRoomUpdate(roomId);
   });
 
   socket.on('game_start', ({ roomId }) => {
-    const targetRoomId = roomId ? String(roomId).toUpperCase() : null;
+    const targetRoomId = getRoomKey(roomId);
     const room = rooms[targetRoomId];
     if (!room) {
       socket.emit('game_start_failed', { reason: '방 정보를 찾을 수 없습니다. 새로고침 후 다시 입장해 주세요.' });
@@ -220,9 +252,9 @@ io.on('connection', (socket) => {
 
     room.gameState = { turn: 'RED', phase: 'CLUE_WAITING', currentClue: null, winner: null };
     
-    if (room.timerInterval) clearInterval(room.timerInterval);
+    clearRoomTimer(targetRoomId);
     startTimer(targetRoomId, room.timerSettings.clueTimeLimit);
-    io.to(targetRoomId).emit('update_room', room);
+    emitRoomUpdate(targetRoomId);
   });
 
   socket.on('submit_clue', ({ roomId, word, count }) => {
@@ -232,9 +264,9 @@ io.on('connection', (socket) => {
     room.gameState.phase = 'GUESSING';
     room.gameState.currentClue = { word, count: parseInt(count, 10), guessedCount: 0 };
     
-    clearInterval(room.timerInterval);
+    clearRoomTimer(roomId);
     startTimer(roomId, room.timerSettings.guessTimeLimit);
-    io.to(roomId).emit('update_room', room);
+    emitRoomUpdate(roomId);
   });
 
   socket.on('click_card', ({ roomId, cardId }) => {
@@ -274,21 +306,21 @@ io.on('connection', (socket) => {
       }
       switchTurn(roomId);
     }
-    io.to(roomId).emit('update_room', room);
+    emitRoomUpdate(roomId);
   });
 
   socket.on('skip_guess', ({ roomId }) => {
     const room = rooms[roomId];
     if (!room || room.gameState.phase !== 'GUESSING') return;
     switchTurn(roomId);
-    io.to(roomId).emit('update_room', room);
+    emitRoomUpdate(roomId);
   });
 
   socket.on('return_to_lobby', ({ roomId }) => {
     const room = rooms[roomId];
     if (!room) return;
 
-    if (room.timerInterval) clearInterval(room.timerInterval);
+    clearRoomTimer(roomId);
     room.gameState = { turn: 'RED', phase: 'LOBBY', currentClue: null, winner: null };
     room.words = [];
     room.timer = 0;
@@ -303,7 +335,7 @@ io.on('connection', (socket) => {
     if (room.slots.BLUE_OPERATIVES) room.slots.BLUE_OPERATIVES = room.slots.BLUE_OPERATIVES.map(v => v === 'LOCKED' ? 'LOCKED' : null);
     enforceSlotStructure(room);
 
-    io.to(roomId).emit('update_room', room);
+    emitRoomUpdate(roomId);
   });
 
   socket.on('disconnect', () => {
@@ -326,14 +358,14 @@ io.on('connection', (socket) => {
             enforceSlotStructure(room);
 
             if (Object.keys(room.players).length === 0) {
-              if (room.timerInterval) clearInterval(room.timerInterval);
+              clearRoomTimer(roomId);
               delete rooms[roomId];
             } else if (wasHost) {
               const nextHostToken = Object.keys(room.players)[0];
               if (nextHostToken) room.players[nextHostToken].isHost = true;
-              io.to(roomId).emit('update_room', room);
+              emitRoomUpdate(roomId);
             } else {
-              io.to(roomId).emit('update_room', room);
+              emitRoomUpdate(roomId);
             }
           }
         }, DISCONNECT_GRACE_MS);
@@ -344,42 +376,47 @@ io.on('connection', (socket) => {
 });
 
 function startTimer(roomId, duration) {
-  const room = rooms[roomId];
+  const targetRoomId = getRoomKey(roomId);
+  const room = rooms[targetRoomId];
   if (!room) return;
   
   room.timer = duration;
-  io.to(roomId).emit('timer_update', { timer: room.timer });
+  io.to(targetRoomId).emit('timer_update', { timer: room.timer });
 
-  room.timerInterval = setInterval(() => {
+  clearRoomTimer(targetRoomId);
+  roomTimers[targetRoomId] = setInterval(() => {
     room.timer -= 1;
-    io.to(roomId).emit('timer_update', { timer: room.timer });
+    io.to(targetRoomId).emit('timer_update', { timer: room.timer });
 
     if (room.timer <= 0) {
-      clearInterval(room.timerInterval);
-      switchTurn(roomId);
-      io.to(roomId).emit('update_room', room);
+      clearRoomTimer(targetRoomId);
+      switchTurn(targetRoomId);
+      emitRoomUpdate(targetRoomId);
     }
   }, 1000);
 }
 
 function switchTurn(roomId) {
-  const room = rooms[roomId];
+  const targetRoomId = getRoomKey(roomId);
+  const room = rooms[targetRoomId];
   if (!room) return;
-  clearInterval(room.timerInterval);
+  clearRoomTimer(targetRoomId);
   
   room.gameState.turn = room.gameState.turn === 'RED' ? 'BLUE' : 'RED';
   room.gameState.phase = 'CLUE_WAITING';
   room.gameState.currentClue = null;
   
-  startTimer(roomId, room.timerSettings.clueTimeLimit);
+  startTimer(targetRoomId, room.timerSettings.clueTimeLimit);
 }
 
 function endGame(roomId, winner) {
-  const room = rooms[roomId];
+  const targetRoomId = getRoomKey(roomId);
+  const room = rooms[targetRoomId];
   if (!room) return;
-  clearInterval(room.timerInterval);
+  clearRoomTimer(targetRoomId);
   room.gameState.phase = 'ENDED';
   room.gameState.winner = winner;
+  emitRoomUpdate(targetRoomId);
 }
 
 const PORT = process.env.PORT || 4000;
