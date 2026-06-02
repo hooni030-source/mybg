@@ -6,7 +6,7 @@
   <title>👑 PREMIUM CODENAMES</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@700;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght=700;900&family=Orbitron:wght=700;900&display=swap" rel="stylesheet">
   <style>
     .font-hud { font-family: 'Orbitron', sans-serif; }
     .font-card { font-family: 'Gothic A1', sans-serif; font-weight: 900; }
@@ -19,32 +19,21 @@
                    0px 4px 8px rgba(0,0,0,0.9);
     }
 
-    /* ==========================================================================
-       🔥 PREMIUM 3D FLIP COMPONENT SHADER (3D 카드 회전 물리 연산엔진)
-       ========================================================================== */
-    .perspective-container {
-      perspective: 1000px; /* 입체적인 3D 깊이감 공간 정의 */
-    }
-    
+    .perspective-container { perspective: 1000px; }
     .flip-card-inner {
       position: relative;
       width: 100%;
       height: 100%;
       text-align: center;
-      transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); /* 회전 가속도 곡선 최적화 */
-      transform-style: preserve-3d; /* 자식 요소들의 3D 평면 유지 */
+      transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-style: preserve-3d;
     }
-    
-    /* 뒤집힘 상태 클래스 트리거 */
-    .is-flipped .flip-card-inner {
-      transform: rotateY(180deg);
-    }
-    
+    .is-flipped .flip-card-inner { transform: rotateY(180deg); }
     .flip-card-front, .flip-card-back {
       position: absolute;
       width: 100%;
       height: 100%;
-      -webkit-backface-visibility: hidden; /* 뒷면일 때 렌더링을 완전히 숨겨 관통 방지 */
+      -webkit-backface-visibility: hidden;
       backface-visibility: hidden;
       border-radius: 1rem;
       display: flex;
@@ -52,19 +41,9 @@
       align-items: center;
       justify-content: center;
     }
-    
-    /* 카드 앞면 (단어가 보이는 베이스 상태) */
-    .flip-card-front {
-      z-index: 2;
-      transform: rotateY(0deg);
-    }
-    
-    /* 카드 뒷면 (팀별 이미지/칼라가 안착될 공간) */
-    .flip-card-back {
-      transform: rotateY(180deg); /* 미리 180도 돌려놓아 뒤집혔을 때 정면을 보게 함 */
-    }
+    .flip-card-front { z-index: 2; transform: rotateY(0deg); }
+    .flip-card-back { transform: rotateY(180deg); }
 
-    /* 3초 전면 팝업 짤 대형 스플래시 애니메이션 */
     .animate-zoom-fade {
       animation: zoomFadeInOut 4s forwards cubic-bezier(0.25, 1, 0.5, 1);
     }
@@ -152,9 +131,10 @@
           <div>
             <label class="block text-xs text-slate-400 mb-1.5">인원 정원 세팅</label>
             <select id="select-max-players" onchange="updateSettings()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-white">
-              <option value="6">6인 (팀장1, 선택자1, 요원1)</option>
-              <option value="8" selected>8인 (팀장1, 선택자1, 요원2)</option>
-              <option value="10">10인 (팀장1, 선택자1, 요원3)</option>
+              <option value="4">4인 모드 (팀장1, 선택자1 - 일반 요원 없음)</option>
+              <option value="6">6인 모드 (팀장1, 선택자1, 요원1)</option>
+              <option value="8" selected>8인 모드 (팀장1, 선택자1, 요원2)</option>
+              <option value="10">10인 모드 (팀장1, 선택자1, 요원3)</option>
             </select>
           </div>
           <div>
@@ -169,18 +149,26 @@
         <button onclick="startGame()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold py-3 rounded-xl shadow-lg font-hud tracking-wider">⚔️ 작전 개시 (START GAME)</button>
       </div>
 
-      <div id="lobby-slots" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="bg-red-950/10 border border-red-900/20 p-5 rounded-2xl space-y-3">
-          <h3 class="text-center font-bold text-red-400 font-hud">🔴 RED FACTION</h3>
-          <div onclick="selectSlot('RED_SPYMASTER')" id="slot-RED_SPYMASTER" class="bg-slate-900 p-3 rounded-xl border border-dashed border-red-500/20 cursor-pointer text-center text-sm hover:bg-slate-800">암호 출제 팀장</div>
-          <div onclick="selectSlot('RED_LEADER')" id="slot-RED_LEADER" class="bg-slate-900 p-3 rounded-xl border border-red-500/40 text-yellow-400 font-bold cursor-pointer text-center text-sm hover:bg-slate-800">🎯 최종 선택자 (클릭 권한자)</div>
-          <div id="slots-red-operatives" class="space-y-2"></div>
+      <div id="lobby-slots" class="grid grid-cols-1 gap-6">
+        <div class="text-center">
+          <button onclick="selectSlot('SPECTATOR')" class="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs px-6 py-3 rounded-xl border border-slate-700 font-hud tracking-widest shadow-md transform active:scale-95 transition-all">
+            🕵️‍♂️ 관전자로 전환 (내 역할 내려놓기 및 초기화)
+          </button>
         </div>
-        <div class="bg-blue-950/10 border border-blue-900/20 p-5 rounded-2xl space-y-3">
-          <h3 class="text-center font-bold text-blue-400 font-hud">🔵 BLUE FACTION</h3>
-          <div onclick="selectSlot('BLUE_SPYMASTER')" id="slot-BLUE_SPYMASTER" class="bg-slate-900 p-3 rounded-xl border border-dashed border-blue-500/20 cursor-pointer text-center text-sm hover:bg-slate-800">암호 출제 팀장</div>
-          <div onclick="selectSlot('BLUE_LEADER')" id="slot-BLUE_LEADER" class="bg-slate-900 p-3 rounded-xl border border-blue-500/40 text-yellow-400 font-bold cursor-pointer text-center text-sm hover:bg-slate-800">🎯 최종 선택자 (클릭 권한자)</div>
-          <div id="slots-blue-operatives" class="space-y-2"></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-red-950/10 border border-red-900/20 p-5 rounded-2xl space-y-3">
+            <h3 class="text-center font-bold text-red-400 font-hud">🔴 RED FACTION</h3>
+            <div onclick="selectSlot('RED_SPYMASTER')" id="slot-RED_SPYMASTER" class="bg-slate-900 p-3 rounded-xl border border-dashed border-red-500/20 cursor-pointer text-center text-sm hover:bg-slate-800 transition">암호 출제 팀장</div>
+            <div onclick="selectSlot('RED_LEADER')" id="slot-RED_LEADER" class="bg-slate-900 p-3 rounded-xl border border-red-500/40 text-yellow-400 font-bold cursor-pointer text-center text-sm hover:bg-slate-800 transition">🎯 최종 선택자 (클릭 권한자)</div>
+            <div id="slots-red-operatives" class="space-y-2"></div>
+          </div>
+          <div class="bg-blue-950/10 border border-blue-900/20 p-5 rounded-2xl space-y-3">
+            <h3 class="text-center font-bold text-blue-400 font-hud">🔵 BLUE FACTION</h3>
+            <div onclick="selectSlot('BLUE_SPYMASTER')" id="slot-BLUE_SPYMASTER" class="bg-slate-900 p-3 rounded-xl border border-dashed border-blue-500/20 cursor-pointer text-center text-sm hover:bg-slate-800 transition">암호 출제 팀장</div>
+            <div onclick="selectSlot('BLUE_LEADER')" id="slot-BLUE_LEADER" class="bg-slate-900 p-3 rounded-xl border border-blue-500/40 text-yellow-400 font-bold cursor-pointer text-center text-sm hover:bg-slate-800 transition">🎯 최종 선택자 (클릭 권한자)</div>
+            <div id="slots-blue-operatives" class="space-y-2"></div>
+          </div>
         </div>
       </div>
 
@@ -211,7 +199,7 @@
         <div id="grid-container" class="word-grid perspective-container"></div>
 
         <div id="post-game-timer-bar" class="hidden bg-slate-900 border border-red-500/20 p-4 rounded-2xl text-center shadow-lg animate-pulse flex flex-col sm:flex-row justify-between items-center gap-3">
-          <p class="text-sm font-hud text-red-400 tracking-wider">⚠️ 작전 종료! <span id="post-game-seconds" class="font-black text-xl text-yellow-400 mx-1">15</span>초 후에 엔딩 전광판 팝업으로 이동합니다. (정답 카드맵 오픈 상태)</p>
+          <p class="text-sm font-hud text-red-400 tracking-wider">⚠️ 작전 종료! <span id="post-game-seconds" class="font-black text-xl text-yellow-400 mx-1">15</span>초 후에 엔딩 전광판 팝업으로 이동합니다.</p>
           <button onclick="requestLobbyReturn()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs px-4 py-2 rounded-xl border border-slate-700 font-hud">⏩ 바로 로비로 복귀</button>
         </div>
       </div>
@@ -289,6 +277,11 @@
       }
 
       document.getElementById('display-status').innerText = `상태: ${room.gameState.phase}`;
+      
+      // 동기화 보정: 셀렉트 박스 현재 룸 스펙에 연동
+      const maxSelect = document.getElementById('select-max-players');
+      if(maxSelect) maxSelect.value = room.config.maxPlayers;
+
       if (me.isHost && room.gameState.phase === 'LOBBY') document.getElementById('host-panel').classList.remove('hidden');
       else document.getElementById('host-panel').classList.add('hidden');
 
@@ -316,10 +309,14 @@
       document.getElementById('slot-BLUE_LEADER').innerText = room.slots.BLUE_LEADER ? `🎯 선택자: ${room.players[room.slots.BLUE_LEADER]?.nickname}` : "🎯 [ BLUE 선택자 등록 ]";
 
       const redOp = document.getElementById('slots-red-operatives'); redOp.innerHTML = '';
-      room.slots.RED_OPERATIVES.forEach((slot, idx) => redOp.appendChild(createSlotElement('RED_OPERATIVES', slot, idx, room.players[myId].isHost)));
+      if(room.slots.RED_OPERATIVES) {
+        room.slots.RED_OPERATIVES.forEach((slot, idx) => redOp.appendChild(createSlotElement('RED_OPERATIVES', slot, idx, room.players[myId].isHost)));
+      }
 
       const blueOp = document.getElementById('slots-blue-operatives'); blueOp.innerHTML = '';
-      room.slots.BLUE_OPERATIVES.forEach((slot, idx) => blueOp.appendChild(createSlotElement('BLUE_OPERATIVES', slot, idx, room.players[myId].isHost)));
+      if(room.slots.BLUE_OPERATIVES) {
+        room.slots.BLUE_OPERATIVES.forEach((slot, idx) => blueOp.appendChild(createSlotElement('BLUE_OPERATIVES', slot, idx, room.players[myId].isHost)));
+      }
     }
 
     function createSlotElement(slotType, slotValue, index, isHost) {
@@ -342,6 +339,7 @@
     }
 
     function selectSlot(slotType, index = null) { socket.emit('select_slot', { roomId: roomState.roomId, slotType, index }); }
+    
     function updateSettings() {
       const maxPlayers = parseInt(document.getElementById('select-max-players').value, 10);
       const clueTimeLimit = parseInt(document.getElementById('input-clue-time').value, 10);
@@ -349,6 +347,7 @@
       socket.emit('change_max_players', { roomId: roomState.roomId, maxPlayers });
       socket.emit('change_timer_settings', { roomId: roomState.roomId, clueTimeLimit, guessTimeLimit });
     }
+    
     function startGame() { socket.emit('game_start', { roomId: roomState.roomId }); }
 
     function renderInGameBoard(room) {
@@ -359,8 +358,8 @@
       const currentLeader = room.gameState.turn === 'RED' ? room.slots.RED_LEADER : room.slots.BLUE_LEADER;
       const amILeaderOfCurrentTurn = (currentLeader === myId);
       
-      const isMyTeamRed = (room.slots.RED_SPYMASTER === myId || room.slots.RED_LEADER === myId || room.slots.RED_OPERATIVES.includes(myId));
-      const isMyTeamBlue = (room.slots.BLUE_SPYMASTER === myId || room.slots.BLUE_LEADER === myId || room.slots.BLUE_OPERATIVES.includes(myId));
+      const isMyTeamRed = (room.slots.RED_SPYMASTER === myId || room.slots.RED_LEADER === myId || (room.slots.RED_OPERATIVES && room.slots.RED_OPERATIVES.includes(myId)));
+      const isMyTeamBlue = (room.slots.BLUE_SPYMASTER === myId || room.slots.BLUE_LEADER === myId || (room.slots.BLUE_OPERATIVES && room.slots.BLUE_OPERATIVES.includes(myId)));
       const isMyTeamTurn = room.gameState.turn === (isMyTeamRed ? 'RED' : isMyTeamBlue ? 'BLUE' : 'SPECTATOR');
 
       const actionBar = document.getElementById('spymaster-action-bar');
@@ -382,7 +381,7 @@
         if(amILeaderOfCurrentTurn) passBtn.classList.remove('hidden');
         else passBtn.classList.add('hidden');
       } else if (room.gameState.phase === 'ENDED') {
-        briefingText.innerHTML = `🏁 <span class="text-emerald-400 font-bold font-hud">${room.gameState.winner} FACTION 작전 완수!</span> - 복기용 정답 맵 활성화 완료.`;
+        briefingText.innerHTML = `🏁 <span class="text-emerald-400 font-bold font-hud">${room.gameState.winner} FACTION 작전 완수!</span>`;
         passBtn.classList.add('hidden');
       } else {
         briefingText.innerText = `⏳ ${room.gameState.turn} 팀장이 암호 신호 조율 중...`;
@@ -393,7 +392,6 @@
       gridContainer.innerHTML = '';
 
       room.words.forEach(card => {
-        // Wrapper 역할을 수행할 3D 카드 컨테이너 디브 생성
         const cardWrapper = document.createElement('div');
         cardWrapper.className = `aspect-[4/3] w-full h-full relative cursor-pointer`;
         
@@ -401,23 +399,17 @@
         const activeType = (card.isRevealed || amISpymaster || isGameEnded) ? card.type : 'UNKNOWN';
         const isForceRevealedByEnd = isGameEnded && !card.isRevealed;
 
-        // 회전 제어를 총괄할 내부 본체 코어 디브 생성
         const innerNode = document.createElement('div');
         innerNode.className = `flip-card-inner`;
         
-        // 뒤집힌 상태 검증 후 3D 플립 오버레이 트리거 부여
         if(card.isRevealed) {
           cardWrapper.className += " is-flipped scale-[0.96]";
         }
 
-        // ----------------------------------------------------
-        // 🔹 FRONT CARD COMPONENT (텍스트 단어 배치 영역)
-        // ----------------------------------------------------
         const frontNode = document.createElement('div');
         frontNode.className = `flip-card-front text-xl md:text-2xl tracking-widest text-center font-bold border transition-all duration-300 bg-slate-900 text-slate-100 border-slate-800 shadow-md p-2`;
         frontNode.innerText = card.text;
 
-        // 마스터 및 게임 피날레 상태에 따른 앞면 컬러 전처리 스킨 칠하기
         if(!card.isRevealed && (amISpymaster || isGameEnded)) {
           if (activeType === 'RED') frontNode.className += ' bg-red-950/70 text-red-300 border-red-900/60';
           else if (activeType === 'BLUE') frontNode.className += ' bg-blue-950/70 text-blue-300 border-blue-900/60';
@@ -425,11 +417,9 @@
           else if (activeType === 'ASSASSIN') frontNode.className += ' bg-black/80 text-red-600 border-red-950 font-black';
         }
 
-        // 클릭 권한 부여 (추리 단계이자 내 턴일 경우)
         if (room.gameState.phase === 'GUESSING' && amILeaderOfCurrentTurn && !card.isRevealed) {
           cardWrapper.onclick = () => socket.emit('click_card', { roomId: room.roomId, cardId: card.id });
         } else if (card.isRevealed) {
-          // 뒤집힌 카드는 클릭 시 이미지 보정/텍스트 반전 레이어 토글 동작
           cardWrapper.onclick = () => {
             revealedCardTextToggleMap[card.id] = !revealedCardTextToggleMap[card.id];
             renderInGameBoard(roomState); 
@@ -438,19 +428,14 @@
           cardWrapper.className += ' cursor-not-allowed opacity-70';
         }
 
-        // ----------------------------------------------------
-        // 🔸 BACK CARD COMPONENT (뒤집혔을 때 나타날 이미지 영역)
-        // ----------------------------------------------------
         const backNode = document.createElement('div');
         backNode.className = `flip-card-back w-full h-full border text-center font-bold relative overflow-hidden shadow-inner`;
 
-        // 카드 타입별 최종 백그라운드 스킨 확정 연산
         if (card.type === 'RED') backNode.className += ' bg-red-600 border-red-500';
         else if (card.type === 'BLUE') backNode.className += ' bg-blue-600 border-blue-500';
         else if (card.type === 'NEUTRAL') backNode.className += ' bg-orange-100 text-slate-900 font-bold border-orange-200';
         else if (card.type === 'ASSASSIN') backNode.className += ' bg-black border-red-600 ring-2 ring-red-600/30';
 
-        // 이미 뒤집혔거나, 복기 모드 시점에 백 엔드단 짤 오버레이 처리
         if (card.isRevealed || isForceRevealedByEnd) {
           let imgSrc = '';
           const randIdx = card.id % 8;
@@ -461,7 +446,6 @@
           else if (card.type === 'NEUTRAL') imgSrc = `/img/neutral/${neutralImages[neutralRandIdx]}`; 
           else if (card.type === 'ASSASSIN') imgSrc = `/img/assasin/mh6.jpg`; 
 
-          // 3초 폭발적인 화면 스플래시 연출 가동
           if (!animatedCardHistoryMap[card.id] && room.gameState.phase !== 'LOBBY' && card.isRevealed) {
             animatedCardHistoryMap[card.id] = true; 
 
@@ -478,7 +462,6 @@
             setTimeout(() => { splashDiv.remove(); }, 4000);
           }
 
-          // 안착용 이미지 생성 및 블러 필터 예외 처리 바인딩
           const img = document.createElement('img');
           img.src = imgSrc;
 
@@ -497,21 +480,18 @@
             backNode.appendChild(img);
           }
         } else {
-          // 게임 강제 종료로 정답 노출 시 폰트 스케일 보정
           backNode.innerText = card.text;
           if (isForceRevealedByEnd) {
             backNode.className += ' font-black text-stroke text-white flex items-center justify-center text-xl';
           }
         }
 
-        // 컴포넌트 역조립 트리 완성
         innerNode.appendChild(frontNode);
         innerNode.appendChild(backNode);
         cardWrapper.appendChild(innerNode);
         gridContainer.appendChild(cardWrapper);
       });
 
-      // 15초 인터벌 딜레이 기동
       if (room.gameState.phase === 'ENDED' && !hasEndTriggered) {
         hasEndTriggered = true; 
         
