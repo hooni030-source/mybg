@@ -6,7 +6,7 @@
   <title>👑 PREMIUM CODENAMES</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght=700;900&family=Orbitron:wght=700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@700;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
   <style>
     .font-hud { font-family: 'Orbitron', sans-serif; }
     .font-card { font-family: 'Gothic A1', sans-serif; font-weight: 900; }
@@ -220,15 +220,32 @@
       'neutral.jpg', 'neutral1.jpg', 'neutral2.jpg', 'neutral3.jpg', 'neutral4.jpg'
     ];
 
-    document.getElementById('view-login').classList.remove('hidden');
-    document.getElementById('view-game').classList.add('hidden');
+    // 💡 [새로고침 인프라 연동] 페이지 로딩 시 LocalStorage의 기존 세션 정보 확인 후 자동 부검
+    window.onload = () => {
+      const savedRoomId = localStorage.getItem('codenames_room_id');
+      const savedToken = localStorage.getItem('codenames_user_token');
+      
+      if (savedRoomId && savedToken) {
+        console.log("[세션 복구 가동] 방 코드:", savedRoomId, "토큰:", savedToken);
+        socket.emit('request_reconnect', { roomId: savedRoomId, userToken: savedToken });
+      }
+    };
+
+    // 만약 세션 복구에 실패(방이 터졌거나 서버가 초기화됨)했다면 로컬 스토리지 클리어
+    socket.on('reconnect_failed', () => {
+      localStorage.removeItem('codenames_room_id');
+      localStorage.removeItem('codenames_user_token');
+    });
 
     function joinRoom() {
       const nickname = document.getElementById('input-nickname').value.trim();
       let roomId = document.getElementById('input-roomid').value.trim();
       if(!nickname) return alert("요원 네임(별명)을 기입해 주세요!");
       if(!roomId) roomId = null;
-      socket.emit('join_room', { roomId, nickname });
+
+      // 💡 신규 조인 시에도 기존 스토리지에 남아있던 토큰이 있다면 재활용해서 방장 권한 승계 유지
+      const existingToken = localStorage.getItem('codenames_user_token');
+      socket.emit('join_room', { roomId, nickname, userToken: existingToken });
     }
 
     function requestLobbyReturn() {
@@ -239,6 +256,10 @@
 
     socket.on('room_joined', (data) => {
       myId = data.myId;
+      // 💡 [세션 저장 박기] 새로고침 대비 스토리지에 실시간 영구 동기화 기록
+      localStorage.setItem('codenames_room_id', data.roomId);
+      localStorage.setItem('codenames_user_token', data.userToken);
+
       document.getElementById('display-room-id').innerText = data.roomId;
       document.getElementById('view-login').classList.add('hidden');
       document.getElementById('view-game').classList.remove('hidden');
@@ -261,8 +282,8 @@
       else if(room.slots.RED_LEADER === myId) badge.innerText = "🎯 RED 선택자";
       else if(room.slots.BLUE_SPYMASTER === myId) badge.innerText = "🔵 BLUE 팀장";
       else if(room.slots.BLUE_LEADER === myId) badge.innerText = "🎯 BLUE 선택자";
-      else if(room.slots.RED_OPERATIVES.includes(myId)) badge.innerText = "RED 일반 요원";
-      else if(room.slots.BLUE_OPERATIVES.includes(myId)) badge.innerText = "BLUE 일반 요원";
+      else if(room.slots.RED_OPERATIVES && room.slots.RED_OPERATIVES.includes(myId)) badge.innerText = "RED 일반 요원";
+      else if(room.slots.BLUE_OPERATIVES && room.slots.BLUE_OPERATIVES.includes(myId)) badge.innerText = "BLUE 일반 요원";
       else badge.innerText = "관전자";
 
       const turnIndicator = document.getElementById('turn-indicator');
@@ -278,10 +299,10 @@
 
       document.getElementById('display-status').innerText = `상태: ${room.gameState.phase}`;
       
-      // 동기화 보정: 셀렉트 박스 현재 룸 스펙에 연동
       const maxSelect = document.getElementById('select-max-players');
-      if(maxSelect) maxSelect.value = room.config.maxPlayers;
+      if(maxSelect && room.config && room.config.maxPlayers) maxSelect.value = room.config.maxPlayers;
 
+      // 💡 [방장 제어판] socket.id 억까 없이 고유 토큰 기준 me.isHost가 켜져 있으면 관리자 패널 영구 노출!
       if (me.isHost && room.gameState.phase === 'LOBBY') document.getElementById('host-panel').classList.remove('hidden');
       else document.getElementById('host-panel').classList.add('hidden');
 
@@ -291,7 +312,6 @@
         document.getElementById('game-over-overlay').classList.add('hidden');
         document.getElementById('post-game-timer-bar').classList.add('hidden');
         hasEndTriggered = false; 
-        Object.keys(animatedCardHistoryMap).forEach(k => delete animatedCardHistoryMap[k]);
         renderLobbySlots(room);
       } else {
         document.getElementById('lobby-slots').classList.add('hidden');
