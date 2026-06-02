@@ -177,11 +177,26 @@ io.on('connection', (socket) => {
   });
 
   socket.on('game_start', ({ roomId }) => {
-    const room = rooms[roomId];
-    if (!room || room.gameState.phase !== 'LOBBY') return;
+    const targetRoomId = roomId ? String(roomId).toUpperCase() : null;
+    const room = rooms[targetRoomId];
+    if (!room) {
+      socket.emit('game_start_failed', { reason: '방 정보를 찾을 수 없습니다. 새로고침 후 다시 입장해 주세요.' });
+      return;
+    }
+    if (room.gameState.phase !== 'LOBBY') {
+      socket.emit('game_start_failed', { reason: '로비 상태에서만 작전을 시작할 수 있습니다.' });
+      return;
+    }
 
     const playerToken = Object.keys(room.players).find(t => room.players[t].socketId === socket.id);
-    if (!playerToken || !room.players[playerToken].isHost) return;
+    if (!playerToken) {
+      socket.emit('game_start_failed', { reason: '현재 소켓이 이 방의 플레이어로 등록되어 있지 않습니다. 다시 입장해 주세요.' });
+      return;
+    }
+    if (!room.players[playerToken].isHost) {
+      socket.emit('game_start_failed', { reason: '호스트만 작전을 시작할 수 있습니다.' });
+      return;
+    }
 
     // 💡 시작 버튼 누를 때 다시 한 번 현재 설정된 정원에 맞게 오퍼레이티브 슬롯 구조를 한 번 더 체크 및 정제
     enforceSlotStructure(room);
@@ -205,8 +220,8 @@ io.on('connection', (socket) => {
     room.gameState = { turn: 'RED', phase: 'CLUE_WAITING', currentClue: null, winner: null };
     
     if (room.timerInterval) clearInterval(room.timerInterval);
-    startTimer(roomId, room.timerSettings.clueTimeLimit);
-    io.to(roomId).emit('update_room', room);
+    startTimer(targetRoomId, room.timerSettings.clueTimeLimit);
+    io.to(targetRoomId).emit('update_room', room);
   });
 
   socket.on('submit_clue', ({ roomId, word, count }) => {

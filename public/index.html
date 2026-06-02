@@ -340,6 +340,9 @@
     });
 
     socket.on('timer_update', (data) => { document.getElementById('display-timer').innerText = String(data.timer).padStart(2, '0'); });
+    socket.on('game_start_failed', (data) => {
+      alert(data?.reason || "작전 개시 요청이 처리되지 않았습니다.");
+    });
 
     function renderLobbySlots(room) {
       document.getElementById('slot-RED_SPYMASTER').innerText = room.slots.RED_SPYMASTER ? `🕵️‍♂️ 팀장: ${room.players[room.slots.RED_SPYMASTER]?.nickname}` : "[ 레드 팀장 등록 ]";
@@ -388,7 +391,11 @@
       socket.emit('change_timer_settings', { roomId: roomState.roomId, clueTimeLimit, guessTimeLimit });
     }
     
-    function startGame() { socket.emit('game_start', { roomId: roomState.roomId }); }
+    function startGame() {
+      if (!roomState?.roomId) return alert("방 정보가 아직 준비되지 않았습니다.");
+      if (!socket.connected) return alert("서버 연결이 끊겼습니다. 새로고침 후 다시 입장해 주세요.");
+      socket.emit('game_start', { roomId: roomState.roomId });
+    }
 
     function renderInGameBoard(room) {
       const isRedSpy = room.slots.RED_SPYMASTER === myId;
